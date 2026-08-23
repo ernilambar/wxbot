@@ -16,12 +16,13 @@
     "wxbot": "./index.js"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "openai": "^4.68.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

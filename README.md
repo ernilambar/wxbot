@@ -15,7 +15,7 @@ text-generation-webui, or a hosted API like OpenAI / Groq / Together).
 
 ## Requirements
 
-- Node.js >= 18
+- Node.js >= 22
 - An OpenAI-compatible inference endpoint (e.g. Ollama running locally)
 
 ## Installation
@@ -87,6 +87,17 @@ To test against a local Ollama server:
    ```
 
 5. Exit the session by typing `quit` or `exit`.
+
+## Tests
+
+Run the test suite (uses Node's built-in test runner, no extra dependencies):
+
+```sh
+npm test
+```
+
+Tests stub the Open-Meteo and OpenAI APIs, so they run offline. They cover
+geocoding, current weather, forecasts, and the agent's tool-calling loop.
 
 ## License
 

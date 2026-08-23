@@ -19,34 +19,39 @@
 
 import OpenAI from "openai";
 import readline from "readline";
+import { pathToFileURL } from "url";
 
 // --- Configuration via environment variables ---
 // Works with ANY OpenAI-compatible endpoint: Ollama, LM Studio, llama.cpp server,
 // vLLM, text-generation-webui, or a hosted API like OpenAI/Groq/Together.
 const { WXBOT_BASE_URL, WXBOT_API_KEY, WXBOT_MODEL } = process.env;
 
-const missing = ["WXBOT_BASE_URL", "WXBOT_API_KEY", "WXBOT_MODEL"].filter(
-  (v) => !process.env[v]
-);
-if (missing.length > 0) {
-  console.error(
-    `Missing required environment variable(s): ${missing.join(", ")}\n` +
-      `Set them in your shell profile, e.g.:\n` +
-      `  export WXBOT_BASE_URL="http://localhost:11434/v1"\n` +
-      `  export WXBOT_API_KEY="your-api-key"\n` +
-      `  export WXBOT_MODEL="qwen3"`
+function validateEnv() {
+  const missing = ["WXBOT_BASE_URL", "WXBOT_API_KEY", "WXBOT_MODEL"].filter(
+    (v) => !process.env[v]
   );
-  process.exit(1);
+  if (missing.length > 0) {
+    console.error(
+      `Missing required environment variable(s): ${missing.join(", ")}\n` +
+        `Set them in your shell profile, e.g.:\n` +
+        `  export WXBOT_BASE_URL="http://localhost:11434/v1"\n` +
+        `  export WXBOT_API_KEY="your-api-key"\n` +
+        `  export WXBOT_MODEL="qwen3"`
+    );
+    process.exit(1);
+  }
 }
 
-const client = new OpenAI({
-  baseURL: WXBOT_BASE_URL,
-  apiKey: WXBOT_API_KEY,
-});
+function createClient() {
+  return new OpenAI({
+    baseURL: WXBOT_BASE_URL,
+    apiKey: WXBOT_API_KEY,
+  });
+}
 
 // ---------- Tool implementations ----------
 
-async function geocode(city) {
+export async function geocode(city) {
   const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
   url.searchParams.set("name", city);
   url.searchParams.set("count", "1");
@@ -59,7 +64,7 @@ async function geocode(city) {
   return { lat: loc.latitude, lon: loc.longitude, tz: loc.timezone || "auto" };
 }
 
-async function getCurrentWeather({ city }) {
+export async function getCurrentWeather({ city }) {
   const coords = await geocode(city);
   if (!coords) return JSON.stringify({ error: `Could not find location: ${city}` });
 
@@ -85,7 +90,7 @@ async function getCurrentWeather({ city }) {
   });
 }
 
-async function getForecast({ city, days = 3 }) {
+export async function getForecast({ city, days = 3 }) {
   const coords = await geocode(city);
   if (!coords) return JSON.stringify({ error: `Could not find location: ${city}` });
 
@@ -151,6 +156,7 @@ const AVAILABLE_FUNCTIONS = {
   getCurrentWeather,
   getForecast,
 };
+export { AVAILABLE_FUNCTIONS };
 
 const SYSTEM_PROMPT = `You are a practical weather assistant. When answering:
 - Use the tools to get real data; never guess numbers.
@@ -160,16 +166,18 @@ const SYSTEM_PROMPT = `You are a practical weather assistant. When answering:
 
 // ---------- Agent with conversational memory ----------
 
-class WeatherAssistant {
-  constructor() {
+export class WeatherAssistant {
+  constructor({ client, model } = {}) {
+    this.client = client ?? createClient();
+    this.model = model ?? WXBOT_MODEL;
     this.messages = [{ role: "system", content: SYSTEM_PROMPT }];
   }
 
   async ask(userMessage) {
     this.messages.push({ role: "user", content: userMessage });
 
-    const response = await client.chat.completions.create({
-      model: WXBOT_MODEL,
+    const response = await this.client.chat.completions.create({
+      model: this.model,
       messages: this.messages,
       tools: TOOLS,
     });
@@ -192,7 +200,7 @@ class WeatherAssistant {
       });
     }
 
-    const final = await client.chat.completions.create({ model: WXBOT_MODEL, messages: this.messages });
+    const final = await this.client.chat.completions.create({ model: this.model, messages: this.messages });
     this.messages.push(final.choices[0].message);
     return final.choices[0].message.content;
   }
@@ -200,7 +208,8 @@ class WeatherAssistant {
 
 // ---------- CLI loop ----------
 
-async function main() {
+export async function main() {
+  validateEnv();
   const assistant = new WeatherAssistant();
   console.log(`Using model "${WXBOT_MODEL}" at ${WXBOT_BASE_URL}`);
   console.log(
@@ -228,4 +237,12 @@ async function main() {
   prompt();
 }
 
-main();
+// Only run the CLI when executed directly (node index.js / wxbot),
+// not when imported by tests or other modules.
+const isDirectRun =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  main();
+}
