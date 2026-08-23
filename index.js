@@ -6,22 +6,12 @@
  *   - Current weather + multi-day forecast
  *   - Conversational memory (remembers city, date across turns)
  *   - Practical recommendations (umbrella, clothing, activity suitability)
- *
- * Requirements:
- *   npm install
- *   ollama pull qwen3        // or llama3.3, any tool-calling-capable model
- *   ollama serve running locally
- *
- * Run:
- *   node index.js
- *   // or, after npm link: weather-assistant
  */
 
 import OpenAI from "openai";
 import readline from "readline";
 import { pathToFileURL } from "url";
 
-// --- Configuration via environment variables ---
 // Works with ANY OpenAI-compatible endpoint: Ollama, LM Studio, llama.cpp server,
 // vLLM, text-generation-webui, or a hosted API like OpenAI/Groq/Together.
 const { WXBOT_BASE_URL, WXBOT_API_KEY, WXBOT_MODEL } = process.env;
@@ -191,7 +181,7 @@ export class WeatherAssistant {
 
     for (const call of toolCalls) {
       const fnName = call.function.name;
-      const fnArgs = JSON.parse(call.function.arguments); // OpenAI sends args as a JSON string
+      const fnArgs = JSON.parse(call.function.arguments);
       const result = await AVAILABLE_FUNCTIONS[fnName](fnArgs);
       this.messages.push({
         role: "tool",
@@ -237,7 +227,7 @@ export async function main() {
   prompt();
 }
 
-// Only run the CLI when executed directly (node index.js / wxbot),
+// Only run the CLI when executed directly (node index.js),
 // not when imported by tests or other modules.
 const isDirectRun =
   process.argv[1] &&

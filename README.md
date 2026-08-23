@@ -4,8 +4,6 @@ Conversational local LLM weather assistant CLI. Works with any
 OpenAI-compatible backend (Ollama, LM Studio, llama.cpp server, vLLM,
 text-generation-webui, or a hosted API like OpenAI / Groq / Together).
 
-> [https://github.com/ernilambar/wxbot](https://github.com/ernilambar/wxbot)
-
 ## Features
 
 - Current weather + multi-day forecast via [Open-Meteo](https://open-meteo.com)
@@ -36,9 +34,6 @@ export WXBOT_BASE_URL="http://localhost:11434/v1"
 export WXBOT_API_KEY="your-api-key"
 export WXBOT_MODEL="qwen3"
 ```
-
-If any variable is missing, `wxbot` exits with an error message listing
-the missing ones.
 
 ## Usage
 
@@ -88,17 +83,6 @@ To test against a local Ollama server:
 
 5. Exit the session by typing `quit` or `exit`.
 
-## Tests
-
-Run the test suite (uses Node's built-in test runner, no extra dependencies):
-
-```sh
-npm test
-```
-
-Tests stub the Open-Meteo and OpenAI APIs, so they run offline. They cover
-geocoding, current weather, forecasts, and the agent's tool-calling loop.
-
 ## License
 
-MIT
+[MIT](LICENSE)
