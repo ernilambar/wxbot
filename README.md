@@ -43,7 +43,7 @@ the missing ones.
 ## Usage
 
 ```sh
-npx wxbot
+node index.js
 # or, after npm link:
 wxbot
 ```
@@ -55,6 +55,38 @@ You: Should I bring an umbrella to Tokyo this week?
 ```
 
 Type `quit` or `exit` to end the conversation.
+
+## Manual testing
+
+To test against a local Ollama server:
+
+1. Install and start Ollama.
+2. Download a tool-calling-capable model:
+
+   ```sh
+   ollama pull qwen3
+   ```
+
+3. Set the environment variables (see [Configuration](#configuration)) and run:
+
+   ```sh
+   export WXBOT_BASE_URL="http://localhost:11434/v1"
+   export WXBOT_API_KEY="not-needed"
+   export WXBOT_MODEL="qwen3"
+   node index.js
+   ```
+
+   Alternatively, after `npm link` (see [Installation](#installation)), run `wxbot`.
+
+4. Try a few prompts:
+
+   ```
+   You: What's the weather like in London right now?
+   You: Should I bring a jacket to Berlin tomorrow?
+   You: Any good plans for outdoor activities in Sydney this week?
+   ```
+
+5. Exit the session by typing `quit` or `exit`.
 
 ## License
 
