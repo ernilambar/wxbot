@@ -17,12 +17,14 @@ import { validateEnv } from "./lib/client.js";
 import { WeatherAssistant } from "./lib/assistant.js";
 import { renderCurrent, renderForecast } from "./lib/render.js";
 
-const HELP = chalk`Commands:
-  {cyan /help}       show this help
-  {cyan /clear}      start a fresh conversation (keeps your units)
-  {cyan /units}      toggle between metric (°C) and imperial (°F)
-
-Anything else is sent to the model. Type {yellow quit} or {yellow exit} to leave.`;
+const HELP = [
+  "Commands:",
+  `  ${chalk.cyan("/help")}       show this help`,
+  `  ${chalk.cyan("/clear")}      start a fresh conversation (keeps your units)`,
+  `  ${chalk.cyan("/units")}      toggle between metric (°C) and imperial (°F)`,
+  "",
+  `Anything else is sent to the model. Type ${chalk.yellow("quit")} or ${chalk.yellow("exit")} to leave.`,
+].join("\n");
 
 function parseUnits(argv) {
   const arg = argv.find((a) => a === "c" || a === "f");
@@ -35,16 +37,32 @@ function show(obj) {
 }
 
 /**
- * Buffers lines while the ora spinner is active and prints them as soon as it
- * stops, so streamed text and cards never interleave mid-line.
+ * Buffers complete lines while the ora spinner is active and prints them as
+ * soon as it stops, so cards never interleave with the spinner or with
+ * streamed text.
+ *
+ * The spinner writes to stderr; streaming deltas and cards go to stdout, and
+ * ora hooks stdout while spinning (clear line, write, re-render). Partial
+ * streamed text written during a spinner is therefore visually clobbered, so
+ * we never write to stdout while the spinner is up: text chunks are queued
+ * too, and flushed in order once the spinner is down.
  */
 function createPrintQueue(getSpinner) {
   let queue = [];
+  let flushing = false;
   const flush = () => {
+    if (flushing) return false;
     if (queue.length > 0 && !getSpinner()?.isSpinning) {
-      process.stdout.write(queue.join("\n") + "\n");
-      queue = [];
+      flushing = true;
+      try {
+        process.stdout.write(queue.join("") + "\n");
+        queue = [];
+        return true;
+      } finally {
+        flushing = false;
+      }
     }
+    return false;
   };
   return {
     push(text) {
@@ -90,11 +108,16 @@ async function repl(assistant) {
   const printQueue = createPrintQueue(() => spinner);
   rl.setPrompt("You: ");
 
+  // Show the prompt before the user types, and re-arm it after each turn.
+  // Calling rl.prompt() when a line arrives (as the async iterator yields it)
+  // would only render "You: " after the input is already submitted, so it
+  // never appears where the user expects it.
+  rl.prompt();
+
   // Use the async iterator rather than rl.question: question() does not
   // re-arm reliably with piped stdin across async gaps, so follow-up
   // piped lines would be silently dropped.
   for await (const line of rl) {
-    rl.prompt();
     const trimmed = line.trim();
     if (["quit", "exit"].includes(trimmed.toLowerCase())) {
       break;
@@ -116,6 +139,7 @@ async function repl(assistant) {
         default:
           console.log(`Unknown command: ${cmd}. Type /help for a list.`);
       }
+      rl.prompt();
       continue;
     }
     try {
@@ -123,10 +147,15 @@ async function repl(assistant) {
       // In a TTY the spinner overwrites its line; when piped, put it on its
       // own line so it doesn't append to the prompt.
       if (!process.stdout.isTTY) process.stdout.write("\n");
+
+      let labeled = false;
       assistant.onDelta = (chunk) => {
-        // flush any queued card, then stream inline
-        printQueue.flush();
-        process.stdout.write(chunk);
+        // Label the assistant's first streamed chunk, then queue everything
+        // while the spinner is up; it's flushed in order once the spinner
+        // stops. Writing to stdout while ora is spinning causes the
+        // spinner's re-render to clobber the partial line.
+        printQueue.push(labeled ? chunk : `Assistant: ${chunk}`);
+        labeled = true;
       };
       assistant.onToolResult = ({ name, result }) => {
         if (name === "getCurrentWeather" || name === "getForecast") {
@@ -136,15 +165,17 @@ async function repl(assistant) {
       const reply = await assistant.askStream(trimmed);
       spinner.stop();
       spinner = null;
-      if (reply) {
-        printQueue.flush();
-        process.stdout.write("\n");
-      }
+      // The spinner is down, so flush() prints the queued streamed text and
+      // any tool-result cards now. If the model produced no streamed text
+      // (e.g. only tool cards), close the line so the next prompt starts fresh.
+      if (!printQueue.flush() && reply) process.stdout.write("\n");
     } catch (err) {
       spinner?.stop();
       spinner = null;
+      printQueue.flush();
       console.error(chalk.red(`Error: ${err.message}`));
     }
+    rl.prompt();
   }
   rl.close();
 }
