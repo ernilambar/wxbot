@@ -1,19 +1,12 @@
 import { test, describe, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 
-// Configure the environment before importing the module so the default
-// OpenAI client can be constructed without real credentials.
-process.env.WXBOT_BASE_URL = "http://localhost:11434/v1";
-process.env.WXBOT_API_KEY = "test-key";
-process.env.WXBOT_MODEL = "qwen3";
-
-const {
+import {
   geocode,
   getCurrentWeather,
   getForecast,
   AVAILABLE_FUNCTIONS,
-  WeatherAssistant,
-} = await import("../index.js");
+} from "../lib/tools.js";
 
 // --- fetch stubs -----------------------------------------------------------
 
@@ -31,8 +24,24 @@ const currentResponse = {
   current: {
     temperature_2m: 21.5,
     relative_humidity_2m: 60,
+    apparent_temperature: 22.1,
+    is_day: 1,
+    precipitation: 0.2,
+    rain: 0.1,
+    showers: 0.1,
+    snowfall: 0,
+    weather_code: 2,
+    cloud_cover_pct: 45,
+    pressure_msl: 1012,
+    surface_pressure: 1010,
     wind_speed_10m: 12.3,
-    precipitation: 0,
+    wind_direction_10m: 220,
+    wind_gusts_10m: 18.9,
+    uv_index: 4.5,
+  },
+  daily: {
+    sunrise: ["2026-08-23T04:30:00"],
+    sunset: ["2026-08-23T18:15:00"],
   },
 };
 
@@ -41,25 +50,31 @@ const forecastResponse = {
     time: ["2026-08-24", "2026-08-25"],
     temperature_2m_max: [30, 28],
     temperature_2m_min: [22, 21],
+    apparent_temperature_max: [31, 29],
+    apparent_temperature_min: [23, 22],
     precipitation_probability_max: [10, 80],
+    precipitation_sum: [0.2, 5.5],
+    rain_sum: [0.2, 5.5],
+    showers_sum: [0, 0],
+    snowfall_sum: [0, 0],
+    weather_code: [0, 61],
     wind_speed_10m_max: [15, 25],
+    wind_gusts_10m_max: [20, 35],
+    uv_index_max: [8, 3],
+    sunrise: ["2026-08-24T04:30:00", "2026-08-25T04:31:00"],
+    sunset: ["2026-08-24T18:14:00", "2026-08-25T18:12:00"],
   },
 };
 
-const fetchStub = (url) => {
-  const path = new URL(url).pathname;
-  if (path === "/v1/search") return jsonResponse(geocodeResponse);
-  if (path === "/v1/forecast") return jsonResponse(currentResponse);
-  throw new Error(`Unexpected fetch: ${url}`);
-};
-
-// Returns the forecast payload instead of current when asked for daily data.
 const forecastFetchStub = (url) => {
   const path = new URL(url).pathname;
   if (path === "/v1/search") return jsonResponse(geocodeResponse);
   if (path === "/v1/forecast") {
     return jsonResponse(
-      new URL(url).searchParams.has("daily") ? forecastResponse : currentResponse
+      new URL(url).searchParams.has("daily") &&
+        new URL(url).searchParams.get("daily") !== "sunrise,sunset"
+        ? forecastResponse
+        : currentResponse
     );
   }
   throw new Error(`Unexpected fetch: ${url}`);
@@ -74,7 +89,7 @@ const jsonResponse = (body) =>
 
 describe("geocode", () => {
   beforeEach(() => {
-    mock.method(globalThis, "fetch", fetchStub);
+    mock.method(globalThis, "fetch", forecastFetchStub);
   });
 
   afterEach(() => {
@@ -92,12 +107,9 @@ describe("geocode", () => {
 
   test("falls back to auto timezone when missing", async () => {
     mock.method(globalThis, "fetch", () =>
-      jsonResponse({
-        results: [{ latitude: 1, longitude: 2 }],
-      })
+      jsonResponse({ results: [{ latitude: 1, longitude: 2 }] })
     );
-    const result = await geocode("Nowhere");
-    assert.equal(result.tz, "auto");
+    assert.equal((await geocode("Nowhere")).tz, "auto");
   });
 
   test("returns null when the city is not found", async () => {
@@ -107,25 +119,38 @@ describe("geocode", () => {
 });
 
 describe("getCurrentWeather", () => {
+  let emptyResults = false;
+
   beforeEach(() => {
-    mock.method(globalThis, "fetch", fetchStub);
+    emptyResults = false;
+    mock.method(globalThis, "fetch", (url) => {
+      if (emptyResults) return jsonResponse({ results: [] });
+      return forecastFetchStub(url);
+    });
   });
 
   afterEach(() => {
     mock.restoreAll();
   });
 
-  test("returns current conditions as JSON", async () => {
+  test("returns rich current conditions as JSON", async () => {
     const result = JSON.parse(await getCurrentWeather({ city: "Tokyo" }));
     assert.equal(result.city, "Tokyo");
-    assert.equal(result.temperature_c, 21.5);
+    assert.equal(result.temperature, 21.5);
+    assert.equal(result.apparent_temperature, 22.1);
     assert.equal(result.humidity_pct, 60);
     assert.equal(result.wind_kmh, 12.3);
-    assert.equal(result.precipitation_mm, 0);
+    assert.equal(result.wind_gusts_kmh, 18.9);
+    assert.equal(result.precipitation_mm, 0.2);
+    assert.equal(result.weather_code, 2);
+    assert.equal(result.uv_index, 4.5);
+    assert.equal(result.pressure_hpa, 1012);
+    assert.equal(result.sunrise, "2026-08-23T04:30:00");
+    assert.equal(result.units, "metric");
   });
 
   test("reports an error for an unknown city", async () => {
-    mock.method(globalThis, "fetch", () => jsonResponse({ results: [] }));
+    emptyResults = true;
     const result = JSON.parse(await getCurrentWeather({ city: "Atlantis" }));
     assert.match(result.error, /Atlantis/);
   });
@@ -140,16 +165,27 @@ describe("getForecast", () => {
     mock.restoreAll();
   });
 
-  test("returns a forecast for the default 3 days", async () => {
+  test("returns a rich multi-day forecast", async () => {
     const result = JSON.parse(await getForecast({ city: "Tokyo" }));
     assert.equal(result.city, "Tokyo");
     assert.equal(result.forecast.length, 2);
     assert.deepEqual(result.forecast[1], {
       date: "2026-08-25",
-      high_c: 28,
-      low_c: 21,
+      high: 28,
+      low: 21,
+      apparent_high: 29,
+      apparent_low: 22,
       rain_chance_pct: 80,
+      precipitation_mm: 5.5,
+      rain_mm: 5.5,
+      showers_mm: 0,
+      snowfall_cm: 0,
+      weather_code: 61,
       wind_kmh: 25,
+      wind_gusts_kmh: 35,
+      uv_index: 3,
+      sunrise: "2026-08-25T04:31:00",
+      sunset: "2026-08-25T18:12:00",
     });
   });
 
@@ -161,6 +197,18 @@ describe("getForecast", () => {
       .find((u) => new URL(u).pathname === "/v1/forecast");
     assert.equal(new URL(forecastUrl).searchParams.get("forecast_days"), "7");
   });
+
+  test("passes imperial units through to the API", async () => {
+    await getForecast({ city: "Tokyo", units: "imperial" });
+    const calls = globalThis.fetch.mock.calls;
+    const forecastUrl = calls
+      .map((c) => c.arguments[0])
+      .find((u) => new URL(u).pathname === "/v1/forecast");
+    const params = new URL(forecastUrl).searchParams;
+    assert.equal(params.get("temperature_unit"), "fahrenheit");
+    assert.equal(params.get("wind_speed_unit"), "mph");
+    assert.equal(params.get("precipitation_unit"), "inch");
+  });
 });
 
 describe("AVAILABLE_FUNCTIONS", () => {
@@ -169,62 +217,5 @@ describe("AVAILABLE_FUNCTIONS", () => {
       "getCurrentWeather",
       "getForecast",
     ]);
-  });
-});
-
-describe("WeatherAssistant", () => {
-  const fakeClient = (messages, replyIndex = 0) => ({
-    chat: {
-      completions: {
-        create: async ({ messages: msgs }) => ({
-          choices: [{ message: messages[replyIndex++] }],
-        }),
-      },
-    },
-  });
-
-  test("returns the model reply when no tools are called", async () => {
-    const assistant = new WeatherAssistant({
-      client: fakeClient([{ content: "Sunny in Tokyo!" }]),
-      model: "qwen3",
-    });
-    const reply = await assistant.ask("Weather in Tokyo?");
-    assert.equal(reply, "Sunny in Tokyo!");
-    assert.equal(assistant.model, "qwen3");
-  });
-
-  test("executes tool calls and returns the final answer", async () => {
-    mock.method(globalThis, "fetch", forecastFetchStub);
-
-    const client = fakeClient([
-      {
-        content: null,
-        tool_calls: [
-          {
-            id: "call_1",
-            type: "function",
-            function: {
-              name: "getCurrentWeather",
-              arguments: JSON.stringify({ city: "Tokyo" }),
-            },
-          },
-        ],
-      },
-      { content: "Bring an umbrella." },
-    ]);
-
-    const assistant = new WeatherAssistant({ client, model: "qwen3" });
-    const reply = await assistant.ask("Should I bring an umbrella?");
-
-    assert.equal(reply, "Bring an umbrella.");
-
-    const toolMessage = assistant.messages.find((m) => m.role === "tool");
-    assert.equal(toolMessage.tool_call_id, "call_1");
-    assert.match(toolMessage.content, /"city":"Tokyo"/);
-  });
-
-  test("falls back to a real client when none is provided", () => {
-    const assistant = new WeatherAssistant({ model: "qwen3" });
-    assert.ok(assistant.client);
   });
 });
