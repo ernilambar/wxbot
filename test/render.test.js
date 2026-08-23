@@ -9,6 +9,8 @@ import {
   colorTemp,
   renderCurrent,
   renderForecast,
+  renderCurrentCompact,
+  renderForecastCompact,
 } from "../lib/render.js";
 
 // Tests run without a TTY, so chalk strips colors unless forced on.
@@ -123,5 +125,48 @@ describe("renderForecast", () => {
     assert.match(out, /☀️/);
     assert.match(out, /30°/);
     assert.match(out, /22°/);
+  });
+});
+
+describe("compact renderers", () => {
+  const current = {
+    city: "Tokyo",
+    temperature: 21.5,
+    apparent_temperature: 22.1,
+    humidity_pct: 60,
+    wind_kmh: 12.3,
+    uv_index: 4.5,
+    weather_code: 2,
+    is_day: 1,
+    units: "metric",
+  };
+
+  test("renderCurrentCompact is a single line without a box", () => {
+    const out = renderCurrentCompact(current);
+    assert.match(out, /Tokyo/);
+    assert.match(out, /⛅/);
+    assert.match(out, /21\.5°C/);
+    assert.match(out, /feels 22\.1°C/);
+    assert.match(out, /💧 60%/);
+    assert.doesNotMatch(out, /╭|╰/);
+  });
+
+  test("renderCurrentCompact renders errors dimmed", () => {
+    assert.match(renderCurrentCompact({ error: "nope" }), /nope/);
+  });
+
+  test("renderForecastCompact is a single line without a box", () => {
+    const forecast = {
+      city: "Tokyo",
+      units: "metric",
+      forecast: [
+        { date: "2026-08-24", high: 30, low: 22, weather_code: 0 },
+        { date: "2026-08-25", high: 28, low: 21, weather_code: 61 },
+      ],
+    };
+    const out = renderForecastCompact(forecast);
+    assert.match(out, /Tokyo/);
+    assert.match(out, /30°C\/22°C/);
+    assert.doesNotMatch(out, /╭|╰/);
   });
 });

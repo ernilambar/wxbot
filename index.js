@@ -12,10 +12,16 @@ import readline from "readline";
 import { pathToFileURL } from "url";
 import chalk from "chalk";
 import ora from "ora";
+import pkg from "./package.json" with { type: "json" };
 
 import { validateEnv } from "./lib/client.js";
 import { WeatherAssistant } from "./lib/assistant.js";
-import { renderCurrent, renderForecast } from "./lib/render.js";
+import {
+  renderCurrent,
+  renderForecast,
+  renderCurrentCompact,
+  renderForecastCompact,
+} from "./lib/render.js";
 
 const HELP = [
   "Commands:",
@@ -26,14 +32,20 @@ const HELP = [
   `Anything else is sent to the model. Type ${chalk.yellow("quit")} or ${chalk.yellow("exit")} to leave.`,
 ].join("\n");
 
+// Chat labels: distinct colors so turns are easy to scan.
+const YOU_LABEL = chalk.bold.cyan("You:");
+const ASSISTANT_LABEL = chalk.bold.green("Assistant:");
+
 function parseUnits(argv) {
   const arg = argv.find((a) => a === "c" || a === "f");
   return arg === "f" ? "imperial" : "metric";
 }
 
-function show(obj) {
-  if (obj.forecast) return renderForecast(obj);
-  return renderCurrent(obj);
+function show(obj, compact = false) {
+  if (obj.forecast) {
+    return compact ? renderForecastCompact(obj) : renderForecast(obj);
+  }
+  return compact ? renderCurrentCompact(obj) : renderCurrent(obj);
 }
 
 /**
@@ -69,11 +81,14 @@ function createPrintQueue(getSpinner) {
       queue.push(text);
       flush();
     },
+    hasQueued() {
+      return queue.length > 0;
+    },
     flush,
   };
 }
 
-function oneShot(argv) {
+async function oneShot(argv) {
   const [prompt, ...rest] = argv;
   const units = parseUnits(rest);
 
@@ -83,30 +98,41 @@ function oneShot(argv) {
   }
 
   const assistant = new WeatherAssistant({ units });
+  let spinner = null;
+  const printQueue = createPrintQueue(() => spinner);
 
+  spinner = ora({ text: "Thinking…", discardStdin: false }).start();
+  if (!process.stdout.isTTY) process.stdout.write("\n");
+
+  assistant.onDelta = (chunk) => {
+    // No "Assistant:" label in one-shot mode — the output is the answer.
+    printQueue.push(chunk);
+  };
   assistant.onToolResult = ({ name, result }) => {
     if (name === "getCurrentWeather" || name === "getForecast") {
-      const obj = JSON.parse(result);
-      console.log(show(obj));
+      printQueue.push(show(JSON.parse(result)));
     }
   };
 
-  assistant
-    .ask(prompt)
-    .then((reply) => {
-      console.log(reply);
-    })
-    .catch((err) => {
-      console.error("Error:", err.message);
-      process.exit(1);
-    });
+  try {
+    const reply = await assistant.askStream(prompt);
+    spinner.stop();
+    spinner = null;
+    if (!printQueue.flush() && reply) process.stdout.write("\n");
+  } catch (err) {
+    spinner?.stop();
+    spinner = null;
+    printQueue.flush();
+    console.error("Error:", err.message);
+    process.exit(1);
+  }
 }
 
 async function repl(assistant) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   let spinner = null;
   const printQueue = createPrintQueue(() => spinner);
-  rl.setPrompt("You: ");
+  rl.setPrompt(`${YOU_LABEL} `);
 
   // Show the prompt before the user types, and re-arm it after each turn.
   // Calling rl.prompt() when a line arrives (as the async iterator yields it)
@@ -154,12 +180,14 @@ async function repl(assistant) {
         // while the spinner is up; it's flushed in order once the spinner
         // stops. Writing to stdout while ora is spinning causes the
         // spinner's re-render to clobber the partial line.
-        printQueue.push(labeled ? chunk : `Assistant: ${chunk}`);
+        // Start the labeled text on a fresh line when a card is already queued.
+        const prefix = labeled ? "" : `${ASSISTANT_LABEL} `;
+        printQueue.push((labeled ? "" : printQueue.hasQueued() ? "\n" : "") + prefix + chunk);
         labeled = true;
       };
       assistant.onToolResult = ({ name, result }) => {
         if (name === "getCurrentWeather" || name === "getForecast") {
-          printQueue.push(show(JSON.parse(result)));
+          printQueue.push(show(JSON.parse(result), true));
         }
       };
       const reply = await assistant.askStream(trimmed);
@@ -181,21 +209,24 @@ async function repl(assistant) {
 }
 
 export async function main() {
-  validateEnv();
   const args = process.argv.slice(2);
+
+  // -v / --version prints the version and exits without needing env vars.
+  if (args.includes("-v") || args.includes("--version")) {
+    console.log(pkg.version);
+    return;
+  }
+
+  validateEnv();
   const hasPrompt = args.some((a) => !a.startsWith("-") && a !== "c" && a !== "f");
 
   if (hasPrompt) {
-    oneShot(args);
+    await oneShot(args);
     return;
   }
 
   const assistant = new WeatherAssistant({ units: parseUnits(args) });
-  console.log(
-    chalk.bold(`Using model "${process.env.WXBOT_MODEL}"`) +
-      chalk.dim(` at ${process.env.WXBOT_BASE_URL}`)
-  );
-  console.log("Weather assistant ready. Type /help for commands, quit to exit.\n");
+  console.log('Weather assistant ready. Try "weather in Tokyo?" — /help for commands, quit to exit.\n');
 
   await repl(assistant);
 }
