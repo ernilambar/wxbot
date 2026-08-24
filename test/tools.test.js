@@ -13,6 +13,9 @@ import {
 const geocodeResponse = {
   results: [
     {
+      name: "Tokyo",
+      admin1: "Tokyo",
+      country: "Japan",
       latitude: 35.6895,
       longitude: 139.6917,
       timezone: "Asia/Tokyo",
@@ -82,6 +85,7 @@ const forecastFetchStub = (url) => {
 
 const jsonResponse = (body) =>
   Promise.resolve({
+    ok: true,
     json: async () => body,
   });
 
@@ -102,12 +106,13 @@ describe("geocode", () => {
       lat: 35.6895,
       lon: 139.6917,
       tz: "Asia/Tokyo",
+      city: "Tokyo, Tokyo, Japan",
     });
   });
 
   test("falls back to auto timezone when missing", async () => {
     mock.method(globalThis, "fetch", () =>
-      jsonResponse({ results: [{ latitude: 1, longitude: 2 }] })
+      jsonResponse({ results: [{ name: "Nowhere", latitude: 1, longitude: 2 }] })
     );
     assert.equal((await geocode("Nowhere")).tz, "auto");
   });
@@ -135,7 +140,7 @@ describe("getCurrentWeather", () => {
 
   test("returns rich current conditions as JSON", async () => {
     const result = JSON.parse(await getCurrentWeather({ city: "Tokyo" }));
-    assert.equal(result.city, "Tokyo");
+    assert.equal(result.city, "Tokyo, Tokyo, Japan");
     assert.equal(result.temperature, 21.5);
     assert.equal(result.apparent_temperature, 22.1);
     assert.equal(result.humidity_pct, 60);
@@ -154,6 +159,12 @@ describe("getCurrentWeather", () => {
     const result = JSON.parse(await getCurrentWeather({ city: "Atlantis" }));
     assert.match(result.error, /Atlantis/);
   });
+
+  test("returns a clear error when the weather service fails", async () => {
+    mock.method(globalThis, "fetch", () => Promise.resolve({ ok: false, status: 503 }));
+    const result = JSON.parse(await getCurrentWeather({ city: "Tokyo" }));
+    assert.equal(result.error, "Weather service request failed (HTTP 503).");
+  });
 });
 
 describe("getForecast", () => {
@@ -167,7 +178,7 @@ describe("getForecast", () => {
 
   test("returns a rich multi-day forecast", async () => {
     const result = JSON.parse(await getForecast({ city: "Tokyo" }));
-    assert.equal(result.city, "Tokyo");
+    assert.equal(result.city, "Tokyo, Tokyo, Japan");
     assert.equal(result.forecast.length, 2);
     assert.deepEqual(result.forecast[1], {
       date: "2026-08-25",
@@ -196,6 +207,14 @@ describe("getForecast", () => {
       .map((c) => c.arguments[0])
       .find((u) => new URL(u).pathname === "/v1/forecast");
     assert.equal(new URL(forecastUrl).searchParams.get("forecast_days"), "7");
+  });
+
+  test("clamps requested days to at least 1", async () => {
+    await getForecast({ city: "Tokyo", days: 0 });
+    const forecastUrl = globalThis.fetch.mock.calls
+      .map((c) => c.arguments[0])
+      .find((u) => new URL(u).pathname === "/v1/forecast");
+    assert.equal(new URL(forecastUrl).searchParams.get("forecast_days"), "1");
   });
 
   test("passes imperial units through to the API", async () => {

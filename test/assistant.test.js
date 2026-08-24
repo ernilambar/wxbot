@@ -47,12 +47,14 @@ describe("WeatherAssistant", () => {
     mock.method(globalThis, "fetch", async (url) => {
       if (new URL(url).pathname === "/v1/search") {
         return {
+          ok: true,
           json: async () => ({
             results: [{ latitude: 1, longitude: 2, timezone: "UTC" }],
           }),
         };
       }
       return {
+        ok: true,
         json: async () => ({
           current: { temperature_2m: 20, relative_humidity_2m: 50 },
           daily: { sunrise: [], sunset: [] },
@@ -125,12 +127,14 @@ describe("WeatherAssistant", () => {
     mock.method(globalThis, "fetch", async (url) => {
       if (new URL(url).pathname === "/v1/search") {
         return {
+          ok: true,
           json: async () => ({
             results: [{ latitude: 1, longitude: 2, timezone: "UTC" }],
           }),
         };
       }
       return {
+        ok: true,
         json: async () => ({
           current: { temperature_2m: 20, relative_humidity_2m: 50 },
           daily: { sunrise: [], sunset: [] },
@@ -197,9 +201,9 @@ describe("WeatherAssistant", () => {
     const seen = [];
     mock.method(globalThis, "fetch", async (url) => {
       if (new URL(url).pathname === "/v1/search") {
-        return { json: async () => ({ results: [{ latitude: 1, longitude: 2 }] }) };
+        return { ok: true, json: async () => ({ results: [{ latitude: 1, longitude: 2 }] }) };
       }
-      return { json: async () => ({ current: { temperature_2m: 20 }, daily: {} }) };
+      return { ok: true, json: async () => ({ current: { temperature_2m: 20 }, daily: {} }) };
     });
 
     let call = 0;
@@ -232,5 +236,68 @@ describe("WeatherAssistant", () => {
     await assistant.ask("weather again?");
     assert.equal(seen[0].units, "metric");
     assert.equal(seen[1].units, "imperial");
+  });
+
+  test("rejects unsupported and malformed tool calls clearly", async () => {
+    const client = {
+      chat: {
+        completions: {
+          create: async () => ({
+            choices: [{
+              message: {
+                content: null,
+                tool_calls: [{
+                  id: "bad_call",
+                  type: "function",
+                  function: { name: "unknownTool", arguments: "{}" },
+                }],
+              },
+            }],
+          }),
+        },
+      },
+    };
+    const assistant = new WeatherAssistant({ client, model: "qwen3" });
+    await assert.rejects(assistant.ask("weather?"), /unsupported tool: unknownTool/);
+
+    const malformedClient = {
+      chat: {
+        completions: {
+          create: async () => ({
+            choices: [{
+              message: {
+                content: null,
+                tool_calls: [{
+                  id: "bad_call",
+                  type: "function",
+                  function: { name: "getCurrentWeather", arguments: "{" },
+                }],
+              },
+            }],
+          }),
+        },
+      },
+    };
+    const malformedAssistant = new WeatherAssistant({ client: malformedClient, model: "qwen3" });
+    await assert.rejects(
+      malformedAssistant.ask("weather?"),
+      /invalid arguments for getCurrentWeather/
+    );
+  });
+
+  test("retains only the most recent conversation turns", async () => {
+    const client = {
+      chat: {
+        completions: {
+          create: async () => ({ choices: [{ message: { content: "ok" } }] }),
+        },
+      },
+    };
+    const assistant = new WeatherAssistant({ client, model: "qwen3" });
+    for (let i = 0; i < 11; i++) {
+      await assistant.ask(`message ${i}`);
+    }
+    assert.equal(assistant.messages.filter((message) => message.role === "user").length, 10);
+    assert.equal(assistant.messages[1].content, "message 1");
   });
 });

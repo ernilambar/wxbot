@@ -36,9 +36,21 @@ const HELP = [
 const YOU_LABEL = chalk.bold.cyan("You:");
 const ASSISTANT_LABEL = chalk.bold.green("Assistant:");
 
-function parseUnits(argv) {
-  const arg = argv.find((a) => a === "c" || a === "f");
+export function parseUnits(argv) {
+  const arg = argv.at(-1);
   return arg === "f" ? "imperial" : "metric";
+}
+
+export function promptArgs(argv) {
+  const args = ["c", "f"].includes(argv.at(-1)) ? argv.slice(0, -1) : argv;
+  const option = args.find((arg) => arg.startsWith("-"));
+  if (option) {
+    throw new Error(`Unknown option: ${option}`);
+  }
+  if (args.length > 1) {
+    throw new Error("Prompt must be supplied as a single quoted string.");
+  }
+  return args;
 }
 
 function show(obj, compact = false) {
@@ -105,12 +117,10 @@ function createPrintQueue(getSpinner) {
   };
 }
 
-async function oneShot(argv) {
-  const [prompt, ...rest] = argv;
-  const units = parseUnits(rest);
+async function oneShot(prompt, units) {
 
   if (!prompt) {
-    console.error("Usage: wxbot [prompt] [c|f]");
+    console.error('Usage: wxbot "[prompt]" [c|f]');
     process.exit(1);
   }
 
@@ -236,11 +246,20 @@ export async function main() {
     return;
   }
 
+  let prompt;
+  try {
+    prompt = promptArgs(args)[0] ?? "";
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exitCode = 1;
+    return;
+  }
+
   validateEnv();
-  const hasPrompt = args.some((a) => !a.startsWith("-") && a !== "c" && a !== "f");
+  const hasPrompt = prompt.length > 0;
 
   if (hasPrompt) {
-    await oneShot(args);
+    await oneShot(prompt, parseUnits(args));
     return;
   }
 

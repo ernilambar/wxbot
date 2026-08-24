@@ -91,6 +91,19 @@ describe("renderCurrent", () => {
     assert.match(out, /⚠️/);
     assert.match(out, /Could not find location/);
   });
+
+  test("renders imperial values with Fahrenheit and inches", () => {
+    const out = renderCurrent({
+      ...sample,
+      temperature: 68,
+      apparent_temperature: 66,
+      precipitation_mm: 0.2,
+      units: "imperial",
+    });
+    assert.match(out, /68°.*F/);
+    assert.match(out, /66°F/);
+    assert.match(out, /Precipitation 0\.2 in/);
+  });
 });
 
 describe("renderForecast", () => {
@@ -125,6 +138,16 @@ describe("renderForecast", () => {
     assert.match(out, /☀️/);
     assert.match(out, /30°/);
     assert.match(out, /22°/);
+  });
+
+  test("labels forecast temperatures in the selected units", () => {
+    const out = renderForecast({
+      ...sample,
+      units: "imperial",
+      forecast: [{ ...sample.forecast[0], high: 86, low: 72 }],
+    });
+    assert.match(out, /86°.*F/);
+    assert.match(out, /72°.*F/);
   });
 });
 
