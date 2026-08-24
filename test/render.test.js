@@ -1,7 +1,7 @@
-import { test, describe } from "node:test";
-import assert from "node:assert/strict";
+import { test, describe } from 'node:test'
+import assert from 'node:assert/strict'
 
-import chalk from "chalk";
+import chalk from 'chalk'
 
 import {
   wmoIcon,
@@ -10,55 +10,55 @@ import {
   renderCurrent,
   renderForecast,
   renderCurrentCompact,
-  renderForecastCompact,
-} from "../lib/render.js";
+  renderForecastCompact
+} from '../lib/render.js'
 
 // Tests run without a TTY, so chalk strips colors unless forced on.
-chalk.level = 3;
+chalk.level = 3
 
-describe("wmoIcon", () => {
-  test("maps common WMO codes", () => {
-    assert.equal(wmoIcon(0), "☀️");
-    assert.equal(wmoIcon(2), "⛅");
-    assert.equal(wmoIcon(61), "🌧️");
-    assert.equal(wmoIcon(95), "⛈️");
-  });
+describe('wmoIcon', () => {
+  test('maps common WMO codes', () => {
+    assert.equal(wmoIcon(0), '☀️')
+    assert.equal(wmoIcon(2), '⛅')
+    assert.equal(wmoIcon(61), '🌧️')
+    assert.equal(wmoIcon(95), '⛈️')
+  })
 
-  test("shows moon at night for clear skies", () => {
-    assert.equal(wmoIcon(0, 0), "🌙");
-  });
+  test('shows moon at night for clear skies', () => {
+    assert.equal(wmoIcon(0, 0), '🌙')
+  })
 
-  test("falls back for unknown codes", () => {
-    assert.equal(wmoIcon(999), "🌡️");
-  });
-});
+  test('falls back for unknown codes', () => {
+    assert.equal(wmoIcon(999), '🌡️')
+  })
+})
 
-describe("sparkline", () => {
-  test("renders a bar chart from values", () => {
-    const out = sparkline([1, 5, 3, 8, 2]);
-    assert.equal(out.length, 5);
-    assert.ok(out.includes("▁"));
-    assert.ok(out.includes("█"));
-  });
+describe('sparkline', () => {
+  test('renders a bar chart from values', () => {
+    const out = sparkline([1, 5, 3, 8, 2])
+    assert.equal(out.length, 5)
+    assert.ok(out.includes('▁'))
+    assert.ok(out.includes('█'))
+  })
 
-  test("handles flat and empty inputs", () => {
+  test('handles flat and empty inputs', () => {
     // span is 0 for flat data, so all bars map to the lowest glyph
-    assert.equal(sparkline([3, 3, 3]), "▁▁▁");
-    assert.equal(sparkline([]), "");
-  });
-});
+    assert.equal(sparkline([3, 3, 3]), '▁▁▁')
+    assert.equal(sparkline([]), '')
+  })
+})
 
-describe("colorTemp", () => {
-  test("wraps the number in ANSI color codes", () => {
-    assert.equal(colorTemp(-15), "\u001b[34m-15°\u001b[39m");
-    assert.equal(colorTemp(25), "\u001b[35m25°\u001b[39m");
-    assert.equal(colorTemp(35), "\u001b[31m35°\u001b[39m");
-  });
-});
+describe('colorTemp', () => {
+  test('wraps the number in ANSI color codes', () => {
+    assert.equal(colorTemp(-15), '\u001b[34m-15°\u001b[39m')
+    assert.equal(colorTemp(25), '\u001b[35m25°\u001b[39m')
+    assert.equal(colorTemp(35), '\u001b[31m35°\u001b[39m')
+  })
+})
 
-describe("renderCurrent", () => {
+describe('renderCurrent', () => {
   const sample = {
-    city: "Tokyo",
+    city: 'Tokyo',
     temperature: 21.5,
     apparent_temperature: 22.1,
     humidity_pct: 60,
@@ -70,90 +70,90 @@ describe("renderCurrent", () => {
     pressure_hpa: 1012,
     uv_index: 4.5,
     is_day: 1,
-    sunrise: "2026-08-23T04:30:00",
-    sunset: "2026-08-23T18:15:00",
-    units: "metric",
-  };
+    sunrise: '2026-08-23T04:30:00',
+    sunset: '2026-08-23T18:15:00',
+    units: 'metric'
+  }
 
-  test("renders a readable box", () => {
-    const out = renderCurrent(sample);
-    assert.match(out, /Tokyo/);
-    assert.match(out, /⛅/);
-    assert.match(out, /feels like/);
-    assert.match(out, /Humidity 60%/);
-    assert.match(out, /gusts/);
-    assert.match(out, /🌅/);
-    assert.match(out, /🌇/);
-  });
+  test('renders a readable box', () => {
+    const out = renderCurrent(sample)
+    assert.match(out, /Tokyo/)
+    assert.match(out, /⛅/)
+    assert.match(out, /feels like/)
+    assert.match(out, /Humidity 60%/)
+    assert.match(out, /gusts/)
+    assert.match(out, /🌅/)
+    assert.match(out, /🌇/)
+  })
 
-  test("renders an error message in a red box", () => {
-    const out = renderCurrent({ error: "Could not find location: X" });
-    assert.match(out, /⚠️/);
-    assert.match(out, /Could not find location/);
-  });
+  test('renders an error message in a red box', () => {
+    const out = renderCurrent({ error: 'Could not find location: X' })
+    assert.match(out, /⚠️/)
+    assert.match(out, /Could not find location/)
+  })
 
-  test("renders imperial values with Fahrenheit and inches", () => {
+  test('renders imperial values with Fahrenheit and inches', () => {
     const out = renderCurrent({
       ...sample,
       temperature: 68,
       apparent_temperature: 66,
       precipitation_mm: 0.2,
-      units: "imperial",
-    });
-    assert.match(out, /68°.*F/);
-    assert.match(out, /66°F/);
-    assert.match(out, /Precipitation 0\.2 in/);
-  });
-});
+      units: 'imperial'
+    })
+    assert.match(out, /68°.*F/)
+    assert.match(out, /66°F/)
+    assert.match(out, /Precipitation 0\.2 in/)
+  })
+})
 
-describe("renderForecast", () => {
+describe('renderForecast', () => {
   const sample = {
-    city: "Tokyo",
-    units: "metric",
+    city: 'Tokyo',
+    units: 'metric',
     forecast: [
       {
-        date: "2026-08-24",
+        date: '2026-08-24',
         high: 30,
         low: 22,
         rain_chance_pct: 10,
         wind_kmh: 15,
-        weather_code: 0,
+        weather_code: 0
       },
       {
-        date: "2026-08-25",
+        date: '2026-08-25',
         high: 28,
         low: 21,
         rain_chance_pct: 80,
         wind_kmh: 25,
-        weather_code: 61,
-      },
-    ],
-  };
+        weather_code: 61
+      }
+    ]
+  }
 
-  test("renders sparklines and per-day rows in a box", () => {
-    const out = renderForecast(sample);
-    assert.match(out, /Tokyo/);
-    assert.match(out, /Temps/);
-    assert.match(out, /🌧️ 80%/);
-    assert.match(out, /☀️/);
-    assert.match(out, /30°/);
-    assert.match(out, /22°/);
-  });
+  test('renders sparklines and per-day rows in a box', () => {
+    const out = renderForecast(sample)
+    assert.match(out, /Tokyo/)
+    assert.match(out, /Temps/)
+    assert.match(out, /🌧️ 80%/)
+    assert.match(out, /☀️/)
+    assert.match(out, /30°/)
+    assert.match(out, /22°/)
+  })
 
-  test("labels forecast temperatures in the selected units", () => {
+  test('labels forecast temperatures in the selected units', () => {
     const out = renderForecast({
       ...sample,
-      units: "imperial",
-      forecast: [{ ...sample.forecast[0], high: 86, low: 72 }],
-    });
-    assert.match(out, /86°.*F/);
-    assert.match(out, /72°.*F/);
-  });
-});
+      units: 'imperial',
+      forecast: [{ ...sample.forecast[0], high: 86, low: 72 }]
+    })
+    assert.match(out, /86°.*F/)
+    assert.match(out, /72°.*F/)
+  })
+})
 
-describe("compact renderers", () => {
+describe('compact renderers', () => {
   const current = {
-    city: "Tokyo",
+    city: 'Tokyo',
     temperature: 21.5,
     apparent_temperature: 22.1,
     humidity_pct: 60,
@@ -161,35 +161,35 @@ describe("compact renderers", () => {
     uv_index: 4.5,
     weather_code: 2,
     is_day: 1,
-    units: "metric",
-  };
+    units: 'metric'
+  }
 
-  test("renderCurrentCompact is a single line without a box", () => {
-    const out = renderCurrentCompact(current);
-    assert.match(out, /Tokyo/);
-    assert.match(out, /⛅/);
-    assert.match(out, /21\.5°C/);
-    assert.match(out, /feels 22\.1°C/);
-    assert.match(out, /💧 60%/);
-    assert.doesNotMatch(out, /╭|╰/);
-  });
+  test('renderCurrentCompact is a single line without a box', () => {
+    const out = renderCurrentCompact(current)
+    assert.match(out, /Tokyo/)
+    assert.match(out, /⛅/)
+    assert.match(out, /21\.5°C/)
+    assert.match(out, /feels 22\.1°C/)
+    assert.match(out, /💧 60%/)
+    assert.doesNotMatch(out, /╭|╰/)
+  })
 
-  test("renderCurrentCompact renders errors dimmed", () => {
-    assert.match(renderCurrentCompact({ error: "nope" }), /nope/);
-  });
+  test('renderCurrentCompact renders errors dimmed', () => {
+    assert.match(renderCurrentCompact({ error: 'nope' }), /nope/)
+  })
 
-  test("renderForecastCompact is a single line without a box", () => {
+  test('renderForecastCompact is a single line without a box', () => {
     const forecast = {
-      city: "Tokyo",
-      units: "metric",
+      city: 'Tokyo',
+      units: 'metric',
       forecast: [
-        { date: "2026-08-24", high: 30, low: 22, weather_code: 0 },
-        { date: "2026-08-25", high: 28, low: 21, weather_code: 61 },
-      ],
-    };
-    const out = renderForecastCompact(forecast);
-    assert.match(out, /Tokyo/);
-    assert.match(out, /30°C\/22°C/);
-    assert.doesNotMatch(out, /╭|╰/);
-  });
-});
+        { date: '2026-08-24', high: 30, low: 22, weather_code: 0 },
+        { date: '2026-08-25', high: 28, low: 21, weather_code: 61 }
+      ]
+    }
+    const out = renderForecastCompact(forecast)
+    assert.match(out, /Tokyo/)
+    assert.match(out, /30°C\/22°C/)
+    assert.doesNotMatch(out, /╭|╰/)
+  })
+})
