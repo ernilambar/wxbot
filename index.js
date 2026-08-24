@@ -62,13 +62,24 @@ function show(obj, compact = false) {
 function createPrintQueue(getSpinner) {
   let queue = [];
   let flushing = false;
+  const lastChar = () => {
+    for (let i = queue.length - 1; i >= 0; i--) {
+      const s = queue[i];
+      if (s.length > 0) return s[s.length - 1];
+    }
+    return null;
+  };
   const flush = () => {
     if (flushing) return false;
     if (queue.length > 0 && !getSpinner()?.isSpinning) {
       flushing = true;
       try {
-        process.stdout.write(queue.join("") + "\n");
+        // Trim trailing newlines (pushBlock ends blocks with one) so the
+        // terminator is exactly a single newline, never a blank line.
+        const out = queue.join("").replace(/\n+$/, "");
         queue = [];
+        if (out.length === 0) return false;
+        process.stdout.write(out + "\n");
         return true;
       } finally {
         flushing = false;
@@ -81,8 +92,14 @@ function createPrintQueue(getSpinner) {
       queue.push(text);
       flush();
     },
-    hasQueued() {
-      return queue.length > 0;
+    /** Push a standalone block (e.g. a weather card): own line before and after. */
+    pushBlock(text) {
+      queue.push((queue.length > 0 && lastChar() !== "\n" ? "\n" : "") + text + "\n");
+      flush();
+    },
+    /** True when queued content would continue mid-line. */
+    midLine() {
+      return queue.length > 0 && lastChar() !== "\n";
     },
     flush,
   };
@@ -110,7 +127,7 @@ async function oneShot(argv) {
   };
   assistant.onToolResult = ({ name, result }) => {
     if (name === "getCurrentWeather" || name === "getForecast") {
-      printQueue.push(show(JSON.parse(result)));
+      printQueue.pushBlock(show(JSON.parse(result)));
     }
   };
 
@@ -180,14 +197,16 @@ async function repl(assistant) {
         // while the spinner is up; it's flushed in order once the spinner
         // stops. Writing to stdout while ora is spinning causes the
         // spinner's re-render to clobber the partial line.
-        // Start the labeled text on a fresh line when a card is already queued.
+        // Start on a fresh line when queued content ends mid-line (e.g. a
+        // tool card or partial text was already pushed).
         const prefix = labeled ? "" : `${ASSISTANT_LABEL} `;
-        printQueue.push((labeled ? "" : printQueue.hasQueued() ? "\n" : "") + prefix + chunk);
+        const gap = labeled ? "" : printQueue.midLine() ? "\n" : "";
+        printQueue.push(gap + prefix + chunk);
         labeled = true;
       };
       assistant.onToolResult = ({ name, result }) => {
         if (name === "getCurrentWeather" || name === "getForecast") {
-          printQueue.push(show(JSON.parse(result), true));
+          printQueue.pushBlock(show(JSON.parse(result), true));
         }
       };
       const reply = await assistant.askStream(trimmed);
