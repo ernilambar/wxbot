@@ -10,11 +10,25 @@ Conversational weather assistant CLI for any OpenAI-compatible backend.
 - Streamed replies, weather cards, sparklines
 - Slash commands: `/help`, `/clear`, `/units`
 
-## Install
+## Install / Upgrade
 
-```sh
-npm install
-npm link   # optional: exposes `wxbot` globally
+**macOS** — prebuilt binary (replace `arm64` with `amd64` for Intel Macs):
+
+```bash
+curl -fL -o wxbot https://github.com/ernilambar/wxbot/releases/latest/download/wxbot-darwin-arm64
+sudo xattr -d com.apple.quarantine wxbot 2>/dev/null || true
+chmod +x wxbot
+sudo mv wxbot /usr/local/bin/
+wxbot --version
+```
+
+**Other platforms** — build from source (requires [Bun](https://bun.sh) ≥ 1.2):
+
+```bash
+git clone https://github.com/ernilambar/wxbot.git
+cd wxbot && bun install
+bun build --compile --minify ./src/index.js --outfile wxbot
+sudo mv wxbot /usr/local/bin/
 ```
 
 ## Configure
@@ -31,7 +45,6 @@ export WXBOT_AI_MODEL="qwen3"
 wxbot                                     # interactive REPL
 wxbot "weather in Tokyo?"                 # one-shot
 wxbot "weather in Tokyo?" --units imperial
-wxbot -v                                  # version
 ```
 
 In the REPL, `/clear` resets the conversation, `/units` toggles metric/imperial, and `quit`/`exit` leaves.

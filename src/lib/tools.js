@@ -155,7 +155,7 @@ async function getForecastRaw ({ city, days = 3, units = 'metric' }) {
 }
 
 // The tool-calling loop hands raw JSON strings back to the model. The rich
-// payloads below are also what the terminal renders (see lib/render.js).
+// payloads below are also what the terminal renders (see src/lib/render.js).
 export async function getCurrentWeather (args) {
   try {
     return JSON.stringify(await getCurrentWeatherRaw(args))

@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
- * Weather AI Assistant — Node.js CLI
+ * Weather AI Assistant — Bun CLI
  *
  * A conversational local LLM agent with:
  *   - Current weather + multi-day forecast
@@ -8,13 +8,13 @@
  *   - Practical recommendations (umbrella, clothing, activity suitability)
  */
 
-import { readFileSync } from 'fs'
 import readline from 'readline'
 import { pathToFileURL } from 'url'
 import chalk from 'chalk'
 import ora from 'ora'
 import yargs from 'yargs'
 
+import pkg from '../package.json'
 import { validateEnv } from './lib/client.js'
 import { WeatherAssistant } from './lib/assistant.js'
 import {
@@ -23,10 +23,6 @@ import {
   renderCurrentCompact,
   renderForecastCompact
 } from './lib/render.js'
-
-const pkg = JSON.parse(
-  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
-)
 
 const HELP = [
   'Commands:',
@@ -319,7 +315,7 @@ export async function main () {
   await repl(assistant)
 }
 
-// Only run the CLI when executed directly (node index.js),
+// Only run the CLI when executed directly (bun src/index.js),
 // not when imported by tests or other modules.
 const isDirectRun =
   process.argv[1] &&

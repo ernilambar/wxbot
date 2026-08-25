@@ -11,7 +11,7 @@ import {
   renderForecast,
   renderCurrentCompact,
   renderForecastCompact
-} from '../lib/render.js'
+} from '../src/lib/render.js'
 
 // Tests run without a TTY, so chalk strips colors unless forced on.
 chalk.level = 3

@@ -6,7 +6,7 @@ import {
   getCurrentWeather,
   getForecast,
   AVAILABLE_FUNCTIONS
-} from '../lib/tools.js'
+} from '../src/lib/tools.js'
 
 // --- fetch stubs -----------------------------------------------------------
 
