@@ -5,7 +5,7 @@ process.env.WXBOT_AI_BASE_URL = 'http://localhost:11434/v1'
 process.env.WXBOT_AI_API_KEY = 'test-key'
 process.env.WXBOT_AI_MODEL = 'qwen3'
 
-const { WeatherAssistant } = await import('../lib/assistant.js')
+const { WeatherAssistant } = await import('../src/lib/assistant.js')
 
 const CURRENT_TOOL_CALL = {
   id: 'call_1',

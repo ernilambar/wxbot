@@ -1,7 +1,7 @@
 {
   "name": "wxbot",
   "version": "1.0.0",
-  "description": "Conversational local LLM weather assistant CLI, works with any OpenAI-compatible backend",
+  "description": "Conversational weather assistant CLI for any OpenAI-compatible backend.",
   "keywords": [
     "weather",
     "cli",
@@ -19,19 +19,18 @@
     "url": "https://github.com/ernilambar/wxbot.git"
   },
   "type": "module",
-  "main": "index.js",
+  "main": "src/index.js",
   "bin": {
-    "wxbot": "./index.js"
+    "wxbot": "./src/index.js"
   },
   "files": [
-    "index.js",
-    "lib"
+    "src"
   ],
   "scripts": {
     "lint": "standard",
     "lint:fix": "standard --fix",
-    "start": "node index.js",
-    "test": "node --test"
+    "start": "bun src/index.js",
+    "test": "bun test"
   },
   "dependencies": {
     "boxen": "^8.0.1",
@@ -44,6 +43,6 @@
     "standard": "^17.1.2"
   },
   "engines": {
-    "node": ">=22"
+    "bun": ">=1.2"
   }
 }

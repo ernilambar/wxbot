@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseArgs } from '../index.js'
+import { parseArgs } from '../src/index.js'
 
 describe('one-shot argument parsing', () => {
   test('requires a multi-word prompt to be quoted', () => {
