@@ -2,6 +2,14 @@
   "name": "wxbot",
   "version": "1.0.0",
   "description": "Conversational local LLM weather assistant CLI, works with any OpenAI-compatible backend",
+  "keywords": [
+    "weather",
+    "cli",
+    "openai",
+    "llm",
+    "open-meteo",
+    "chatbot"
+  ],
   "homepage": "https://github.com/ernilambar/wxbot#readme",
   "bugs": {
     "url": "https://github.com/ernilambar/wxbot/issues"
@@ -15,6 +23,10 @@
   "bin": {
     "wxbot": "./index.js"
   },
+  "files": [
+    "index.js",
+    "lib"
+  ],
   "scripts": {
     "lint": "standard",
     "lint:fix": "standard --fix",

@@ -157,11 +157,6 @@ function createPrintQueue (getSpinner) {
 }
 
 async function oneShot (prompt, units) {
-  if (!prompt) {
-    console.error('Usage: wxbot "[prompt]" [c|f]')
-    process.exit(1)
-  }
-
   const assistant = new WeatherAssistant({ units })
   let spinner = null
   const printQueue = createPrintQueue(() => spinner)
@@ -198,6 +193,11 @@ async function repl (assistant) {
   let spinner = null
   const printQueue = createPrintQueue(() => spinner)
   rl.setPrompt(`${YOU_LABEL} `)
+
+  process.once('SIGINT', () => {
+    console.log('\nBye!')
+    process.exit(0)
+  })
 
   // Show the prompt before the user types, and re-arm it after each turn.
   // Calling rl.prompt() when a line arrives (as the async iterator yields it)
@@ -299,7 +299,13 @@ export async function main () {
     return
   }
 
-  validateEnv()
+  try {
+    validateEnv()
+  } catch (err) {
+    console.error(`Error: ${err.message}`)
+    process.exitCode = 1
+    return
+  }
   const hasPrompt = parsed.prompt.length > 0
 
   if (hasPrompt) {
