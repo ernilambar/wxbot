@@ -1,28 +1,28 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseUnits, promptArgs } from '../index.js'
+import { parseArgs } from '../index.js'
 
 describe('one-shot argument parsing', () => {
   test('requires a multi-word prompt to be quoted', () => {
     assert.throws(
-      () => promptArgs(['weather', 'in', 'Tokyo']),
+      () => parseArgs(['weather', 'in', 'Tokyo']),
       /Prompt must be supplied as a single quoted string/
     )
-    assert.deepEqual(promptArgs(['weather in Tokyo']), ['weather in Tokyo'])
-    assert.deepEqual(promptArgs(['weather in Tokyo', 'f']), ['weather in Tokyo'])
+    assert.deepEqual(parseArgs(['weather in Tokyo']), { units: 'metric', prompt: 'weather in Tokyo' })
+    assert.deepEqual(parseArgs(['weather in Tokyo', '-u', 'imperial']), { units: 'imperial', prompt: 'weather in Tokyo' })
   })
 
-  test('uses a final c or f argument as the unit selector', () => {
-    assert.deepEqual(promptArgs(['weather in Tokyo', 'f']), ['weather in Tokyo'])
-    assert.equal(parseUnits(['weather in Tokyo', 'f']), 'imperial')
-    assert.equal(parseUnits(['weather in Tokyo']), 'metric')
+  test('parses -u / --units as the unit selector', () => {
+    assert.deepEqual(parseArgs(['weather in Tokyo', '-u', 'imperial']), { units: 'imperial', prompt: 'weather in Tokyo' })
+    assert.deepEqual(parseArgs(['weather in Tokyo', '--units', 'imperial']), { units: 'imperial', prompt: 'weather in Tokyo' })
+    assert.deepEqual(parseArgs(['weather in Tokyo']), { units: 'metric', prompt: 'weather in Tokyo' })
   })
 
-  test('rejects unsupported options instead of sending them to the model', () => {
+  test('rejects invalid units choices', () => {
     assert.throws(
-      () => promptArgs(['weather', 'in', 'Tokyo', '--json']),
-      /Unknown option: --json/
+      () => parseArgs(['weather in Tokyo', '--units', 'fahrenheit']),
+      /Invalid values/
     )
   })
 })

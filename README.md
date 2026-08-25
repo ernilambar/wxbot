@@ -31,10 +31,10 @@ export WXBOT_MODEL="qwen3"
 ## Usage
 
 ```sh
-wxbot                          # interactive REPL
-wxbot "weather in Tokyo?"      # one-shot, prints one answer and exits
-wxbot "weather in Tokyo?" f    # one-shot in imperial (°F)
-wxbot -v                       # print version
+wxbot                                            # interactive REPL
+wxbot "weather in Tokyo?"                        # one-shot, prints one answer and exits
+wxbot "weather in Tokyo?" --units imperial       # one-shot in imperial (°F)
+wxbot -v                                         # print version
 ```
 
 In the REPL, `/clear` resets the conversation, `/units` toggles metric/imperial,

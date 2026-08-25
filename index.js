@@ -13,6 +13,7 @@ import readline from 'readline'
 import { pathToFileURL } from 'url'
 import chalk from 'chalk'
 import ora from 'ora'
+import yargs from 'yargs'
 
 import { validateEnv } from './lib/client.js'
 import { WeatherAssistant } from './lib/assistant.js'
@@ -36,25 +37,59 @@ const HELP = [
   `Anything else is sent to the model. Type ${chalk.yellow('quit')} or ${chalk.yellow('exit')} to leave.`
 ].join('\n')
 
+const CLI_HELP = [
+  `${chalk.bold('wxbot')} ${chalk.dim(pkg.version || '')} — Conversational local LLM weather assistant`,
+  '',
+  chalk.bold('Usage:'),
+  `  ${chalk.cyan('wxbot')}                          interactive REPL`,
+  `  ${chalk.cyan('wxbot')} "${chalk.yellow('<prompt>')}" [${chalk.yellow('-u <units>')}]  one-shot mode, prints one answer and exits`,
+  '',
+  chalk.bold('Options:'),
+  `  ${chalk.cyan('-h, --help')}             show this help`,
+  `  ${chalk.cyan('-v, --version')}          show version`,
+  `  ${chalk.cyan('-u, --units <units>')}    set units: ${chalk.yellow('imperial')} or ${chalk.yellow('metric')} (default: metric)`,
+  '',
+  chalk.bold('Examples:'),
+  `  ${chalk.cyan('wxbot')} "weather in Tokyo?"`,
+  `  ${chalk.cyan('wxbot')} "Will I need an umbrella this week?" ${chalk.yellow('--units imperial')}`,
+  '',
+  chalk.bold('Environment:'),
+  `  ${chalk.cyan('WXBOT_BASE_URL')}  OpenAI-compatible API endpoint`,
+  `  ${chalk.cyan('WXBOT_API_KEY')}   API key (or "not-needed" for local backends)`,
+  `  ${chalk.cyan('WXBOT_MODEL')}     Model name to use`
+].join('\n')
+
 // Chat labels: distinct colors so turns are easy to scan.
 const YOU_LABEL = chalk.bold.cyan('You:')
 const ASSISTANT_LABEL = chalk.bold.green('Assistant:')
 
-export function parseUnits (argv) {
-  const arg = argv.at(-1)
-  return arg === 'f' ? 'imperial' : 'metric'
-}
+export function parseArgs (argv) {
+  const parsed = yargs(argv)
+    .usage('$0 "[prompt]" [options]')
+    .option('units', {
+      alias: 'u',
+      type: 'string',
+      choices: ['imperial', 'metric'],
+      default: 'metric',
+      describe: 'set units: imperial or metric'
+    })
+    .exitProcess(false)
+    .help(false)
+    .version(false)
+    .fail((msg) => {
+      throw new Error(msg)
+    })
+    .parse()
 
-export function promptArgs (argv) {
-  const args = ['c', 'f'].includes(argv.at(-1)) ? argv.slice(0, -1) : argv
-  const option = args.find((arg) => arg.startsWith('-'))
-  if (option) {
-    throw new Error(`Unknown option: ${option}`)
-  }
-  if (args.length > 1) {
+  const positional = parsed._
+  if (positional.length > 1) {
     throw new Error('Prompt must be supplied as a single quoted string.')
   }
-  return args
+
+  return {
+    units: parsed.units,
+    prompt: positional[0] ?? ''
+  }
 }
 
 function show (obj, compact = false) {
@@ -249,9 +284,15 @@ export async function main () {
     return
   }
 
-  let prompt
+  // -h / --help prints usage and exits without needing env vars.
+  if (args.includes('-h') || args.includes('--help')) {
+    console.log(CLI_HELP)
+    return
+  }
+
+  let parsed
   try {
-    prompt = promptArgs(args)[0] ?? ''
+    parsed = parseArgs(args)
   } catch (err) {
     console.error(`Error: ${err.message}`)
     process.exitCode = 1
@@ -259,14 +300,14 @@ export async function main () {
   }
 
   validateEnv()
-  const hasPrompt = prompt.length > 0
+  const hasPrompt = parsed.prompt.length > 0
 
   if (hasPrompt) {
-    await oneShot(prompt, parseUnits(args))
+    await oneShot(parsed.prompt, parsed.units)
     return
   }
 
-  const assistant = new WeatherAssistant({ units: parseUnits(args) })
+  const assistant = new WeatherAssistant({ units: parsed.units })
   console.log('Weather assistant ready. Try "weather in Tokyo?" — /help for commands, quit to exit.\n')
 
   await repl(assistant)
