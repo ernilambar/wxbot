@@ -1,9 +1,9 @@
 import { test, describe, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 
-process.env.WXBOT_BASE_URL = 'http://localhost:11434/v1'
-process.env.WXBOT_API_KEY = 'test-key'
-process.env.WXBOT_MODEL = 'qwen3'
+process.env.WXBOT_AI_BASE_URL = 'http://localhost:11434/v1'
+process.env.WXBOT_AI_API_KEY = 'test-key'
+process.env.WXBOT_AI_MODEL = 'qwen3'
 
 const { WeatherAssistant } = await import('../lib/assistant.js')
 
@@ -22,7 +22,7 @@ async function * deltaStream (deltas) {
 
 describe('WeatherAssistant', () => {
   beforeEach(() => {
-    process.env.WXBOT_MODEL = 'qwen3'
+    process.env.WXBOT_AI_MODEL = 'qwen3'
   })
 
   afterEach(() => {

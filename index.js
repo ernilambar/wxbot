@@ -54,9 +54,9 @@ const CLI_HELP = [
   `  ${chalk.cyan('wxbot')} "Will I need an umbrella this week?" ${chalk.yellow('--units imperial')}`,
   '',
   chalk.bold('Environment:'),
-  `  ${chalk.cyan('WXBOT_BASE_URL')}  OpenAI-compatible API endpoint`,
-  `  ${chalk.cyan('WXBOT_API_KEY')}   API key (or "not-needed" for local backends)`,
-  `  ${chalk.cyan('WXBOT_MODEL')}     Model name to use`
+  `  ${chalk.cyan('WXBOT_AI_BASE_URL')}  OpenAI-compatible API endpoint`,
+  `  ${chalk.cyan('WXBOT_AI_API_KEY')}   API key (or "not-needed" for local backends)`,
+  `  ${chalk.cyan('WXBOT_AI_MODEL')}     Model name to use`
 ].join('\n')
 
 // Chat labels: distinct colors so turns are easy to scan.

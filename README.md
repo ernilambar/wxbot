@@ -20,9 +20,9 @@ npm link   # optional: exposes `wxbot` globally
 ## Configure
 
 ```sh
-export WXBOT_BASE_URL="http://localhost:11434/v1"
-export WXBOT_API_KEY="your-api-key"
-export WXBOT_MODEL="qwen3"
+export WXBOT_AI_BASE_URL="http://localhost:11434/v1"
+export WXBOT_AI_API_KEY="your-api-key"
+export WXBOT_AI_MODEL="qwen3"
 ```
 
 ## Usage
@@ -40,9 +40,9 @@ In the REPL, `/clear` resets the conversation, `/units` toggles metric/imperial,
 
 ```sh
 ollama pull qwen3
-export WXBOT_BASE_URL="http://localhost:11434/v1"
-export WXBOT_API_KEY="not-needed"
-export WXBOT_MODEL="qwen3"
+export WXBOT_AI_BASE_URL="http://localhost:11434/v1"
+export WXBOT_AI_API_KEY="not-needed"
+export WXBOT_AI_MODEL="qwen3"
 wxbot
 ```
 
