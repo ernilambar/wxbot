@@ -1,17 +1,14 @@
 # wxbot
 
-Conversational LLM weather assistant CLI. Works with any OpenAI-compatible
-backend (Ollama, LM Studio, llama.cpp, vLLM, etc.).
+Conversational weather assistant CLI for any OpenAI-compatible backend.
 
 ## Features
 
 - Current weather + multi-day forecast via [Open-Meteo](https://open-meteo.com)
 - Real-time data via tool calling — never guesses numbers
 - Conversational memory across turns
-- Boxed weather cards, icons, color-coded temps, sparklines
-- Streamed replies with a loading spinner
+- Streamed replies, weather cards, sparklines
 - Slash commands: `/help`, `/clear`, `/units`
-- One-shot mode and `-v` / `--version`
 
 ## Install
 
@@ -31,21 +28,13 @@ export WXBOT_MODEL="qwen3"
 ## Usage
 
 ```sh
-wxbot                                            # interactive REPL
-wxbot "weather in Tokyo?"                        # one-shot, prints one answer and exits
-wxbot "weather in Tokyo?" --units imperial       # one-shot in imperial (°F)
-wxbot -v                                         # print version
+wxbot                                     # interactive REPL
+wxbot "weather in Tokyo?"                 # one-shot
+wxbot "weather in Tokyo?" --units imperial
+wxbot -v                                  # version
 ```
 
-In the REPL, `/clear` resets the conversation, `/units` toggles metric/imperial,
-and `quit`/`exit` leaves. Example:
-
-```
-You: Should I bring an umbrella to Tokyo this week?
-
-Assistant: Given the forecast, I'd bring one — there's rain expected later
-this week, so an umbrella will come in handy.
-```
+In the REPL, `/clear` resets the conversation, `/units` toggles metric/imperial, and `quit`/`exit` leaves.
 
 ## Manual testing
 
