@@ -56,8 +56,9 @@ ollama pull qwen3
 export WXBOT_AI_BASE_URL="http://localhost:11434/v1"
 export WXBOT_AI_API_KEY="not-needed"
 export WXBOT_AI_MODEL="qwen3"
-wxbot
+bun src/index.js
 ```
+
 
 ## License
 

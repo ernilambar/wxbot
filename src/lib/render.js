@@ -1,5 +1,5 @@
 import chalk from 'chalk'
-import boxen from 'boxen'
+import stringWidth from 'string-width'
 
 // ---------- Terminal rendering ----------
 
@@ -138,17 +138,15 @@ function fmtTime (iso, units) {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
-function box (text, opts = {}) {
-  return boxen(text, {
-    padding: { top: 0, bottom: 0, left: 1, right: 1 },
-    margin: { top: 0, bottom: 1, left: 0, right: 0 },
-    borderStyle: 'round',
-    ...opts
-  })
+function box (text) {
+  const padded = text.split('\n').map((line) => `  ${line}`)
+  const width = Math.max(...padded.map(stringWidth))
+  const bar = '─'.repeat(width)
+  return `${bar}\n${padded.join('\n')}\n${bar}`
 }
 
 export function renderCurrent (obj) {
-  if (obj.error) return box(chalk.red(`⚠️  ${obj.error}`), { borderColor: 'red' })
+  if (obj.error) return box(chalk.red(`⚠️  ${obj.error}`))
   const icon = wmoIcon(obj.weather_code, obj.is_day)
   const title = `${icon} ${chalk.bold(obj.city)} — ${weatherLabel(obj.weather_code ?? -1)}`
   const tempLine = obj.apparent_temperature != null
@@ -189,7 +187,7 @@ export function renderCurrentCompact (obj) {
 }
 
 export function renderForecast (obj) {
-  if (obj.error) return box(chalk.red(`⚠️  ${obj.error}`), { borderColor: 'red' })
+  if (obj.error) return box(chalk.red(`⚠️  ${obj.error}`))
   const rows = []
   const high = obj.forecast.map((d) => d.high ?? 0)
   const low = obj.forecast.map((d) => d.low ?? 0)
