@@ -1,6 +1,6 @@
 {
   "name": "wxbot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Conversational weather assistant CLI for any OpenAI-compatible backend.",
   "keywords": [
     "weather",
@@ -37,7 +37,7 @@
   "dependencies": {
     "boxen": "^8.0.1",
     "chalk": "^6.0.0",
-    "openai": "^4.68.0",
+    "openai": "^7.13.0",
     "ora": "^9.4.1",
     "yargs": "^18.1.0"
   },
