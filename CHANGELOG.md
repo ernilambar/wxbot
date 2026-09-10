@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.2 - 2026-09-10
+- Changed: Replace boxen with dynamic dash bars
+
 ## 0.1.1 - 2026-09-10
 - Changed: Update openai dependency from v4 to v7.13.0
 
