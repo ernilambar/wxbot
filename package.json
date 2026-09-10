@@ -27,10 +27,10 @@
     "src"
   ],
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
     "build": "mkdir -p dist && bun build --compile --minify ./src/index.js --outfile dist/wxbot",
     "build:mac": "mkdir -p dist && bun build --compile --target=bun-darwin-arm64 --minify ./src/index.js --outfile dist/wxbot-darwin-arm64 && bun build --compile --target=bun-darwin-x64 --minify ./src/index.js --outfile dist/wxbot-darwin-amd64",
+    "format": "eslint --fix .",
+    "lint": "eslint .",
     "start": "bun src/index.js",
     "test": "bun test"
   },
@@ -42,9 +42,11 @@
     "yargs": "^18.1.0"
   },
   "devDependencies": {
-    "standard": "^17.1.2"
+    "eslint": "^9.39.5",
+    "neostandard": "^0.13.0"
   },
   "engines": {
-    "bun": ">=1.2"
+    "bun": ">=1.2",
+    "node": ">=22"
   }
 }
