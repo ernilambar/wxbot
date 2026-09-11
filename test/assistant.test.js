@@ -187,6 +187,52 @@ describe('WeatherAssistant', () => {
     assert.match(toolMessage.content, /Tokyo/)
   })
 
+  test('askStream tolerates a backend that resends the full tool name each delta', async () => {
+    mock.method(globalThis, 'fetch', async (url) => {
+      if (new URL(url).pathname === '/v1/search') {
+        return {
+          ok: true,
+          json: async () => ({
+            results: [{ latitude: 1, longitude: 2, timezone: 'UTC' }]
+          })
+        }
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          current: { temperature_2m: 20, relative_humidity_2m: 50 },
+          daily: { sunrise: [], sunset: [] }
+        })
+      }
+    })
+
+    let call = 0
+    const client = {
+      chat: {
+        completions: {
+          create: async () => {
+            call++
+            if (call === 1) {
+              return deltaStream([
+                { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'getCurrentWeather', arguments: '{"city":' } }] },
+                { tool_calls: [{ index: 0, function: { name: 'getCurrentWeather', arguments: '"Tokyo"}' } }] },
+                { tool_calls: [{ index: 0, function: { name: 'getCurrentWeather' } }] }
+              ])
+            }
+            return deltaStream([{ content: 'Done.' }])
+          }
+        }
+      }
+    }
+
+    const assistant = new WeatherAssistant({ client, model: 'qwen3' })
+    const reply = await assistant.askStream('Weather in Tokyo?')
+    assert.equal(reply, 'Done.')
+    const toolMessage = assistant.messages.find((m) => m.role === 'tool')
+    assert.ok(toolMessage, 'expected a tool message')
+    assert.match(toolMessage.content, /Tokyo/)
+  })
+
   test('reset clears conversation but keeps units', () => {
     const client = { chat: { completions: { create: async () => ({}) } } }
     const assistant = new WeatherAssistant({ client, units: 'imperial' })

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.3 - 2026-09-11
+- Fixed: Duplicated tool name when a backend resends the full name in every streaming delta
+
 ## 0.1.2 - 2026-09-10
 - Changed: Replace boxen with dynamic dash bars
 

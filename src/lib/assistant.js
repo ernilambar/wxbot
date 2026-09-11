@@ -25,7 +25,16 @@ function collectToolCallDeltas (delta, toolCalls) {
       function: { name: '', arguments: '' }
     })
     if (d.id) call.id = d.id
-    if (d.function?.name) call.function.name += d.function.name
+    if (d.function?.name) {
+      // OpenAI sends the name once, in the first delta for a call. Some
+      // OpenAI-compatible servers (Ollama, vLLM, LM Studio) instead resend
+      // the full name on every delta; skip a fragment that is already the
+      // tail of what we have so we don't build
+      // "getCurrentWeathergetCurrentWeather...".
+      if (!call.function.name.endsWith(d.function.name)) {
+        call.function.name += d.function.name
+      }
+    }
     if (d.function?.arguments) call.function.arguments += d.function.arguments
   }
 }
