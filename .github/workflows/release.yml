@@ -15,8 +15,6 @@ jobs:
         include:
           - target: bun-darwin-arm64
             suffix: darwin-arm64
-          - target: bun-darwin-x64
-            suffix: darwin-amd64
     steps:
       - uses: actions/checkout@v4
 

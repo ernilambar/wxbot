@@ -1,7 +1,7 @@
 {
   "name": "wxbot",
   "version": "0.1.3",
-  "description": "Conversational weather assistant CLI for any OpenAI-compatible backend.",
+  "description": "AI weather assistant in your terminal.",
   "keywords": [
     "weather",
     "cli",
@@ -28,7 +28,7 @@
   ],
   "scripts": {
     "build": "mkdir -p dist && bun build --compile --minify ./src/index.js --outfile dist/wxbot",
-    "build:mac": "mkdir -p dist && bun build --compile --target=bun-darwin-arm64 --minify ./src/index.js --outfile dist/wxbot-darwin-arm64 && bun build --compile --target=bun-darwin-x64 --minify ./src/index.js --outfile dist/wxbot-darwin-amd64",
+    "build:mac": "mkdir -p dist && bun build --compile --target=bun-darwin-arm64 --minify ./src/index.js --outfile dist/wxbot-darwin-arm64",
     "format": "eslint --fix .",
     "lint": "eslint .",
     "start": "bun src/index.js",

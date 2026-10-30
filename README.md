@@ -1,6 +1,6 @@
 # wxbot
 
-Conversational weather assistant CLI for any OpenAI-compatible backend.
+AI weather assistant in your terminal.
 
 ## Features
 
@@ -12,7 +12,17 @@ Conversational weather assistant CLI for any OpenAI-compatible backend.
 
 ## Install / Upgrade
 
-**macOS** — prebuilt binary (replace `arm64` with `amd64` for Intel Macs):
+**Homebrew (macOS, Apple Silicon)** — recommended:
+
+```bash
+brew tap ernilambar/tap
+brew trust ernilambar/tap
+brew install ernilambar/tap/wxbot
+```
+
+Upgrade later with `brew upgrade wxbot`.
+
+**Prebuilt binary (macOS, Apple Silicon)** — without Homebrew:
 
 ```bash
 curl -fL -o wxbot https://github.com/ernilambar/wxbot/releases/latest/download/wxbot-darwin-arm64
@@ -42,8 +52,8 @@ export WXBOT_AI_MODEL="qwen3"
 ## Usage
 
 ```sh
-wxbot                                     # interactive REPL
-wxbot "weather in Tokyo?"                 # one-shot
+wxbot
+wxbot "weather in Tokyo?"
 wxbot "weather in Tokyo?" --units imperial
 ```
 
@@ -59,7 +69,6 @@ export WXBOT_AI_MODEL="qwen3"
 bun src/index.js
 ```
 
-
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © [Nilambar Sharma](https://www.nilambar.net)
