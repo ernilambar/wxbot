@@ -121,6 +121,24 @@ describe('geocode', () => {
     mock.method(globalThis, 'fetch', () => jsonResponse({ results: [] }))
     assert.equal(await geocode('Atlantis'), null)
   })
+
+  test('a comma qualifier picks among same-named places', async () => {
+    const requested = []
+    mock.method(globalThis, 'fetch', (url) => {
+      requested.push(new URL(url).searchParams)
+      return jsonResponse({
+        results: [
+          { name: 'Paris', admin1: 'Île-de-France', country: 'France', country_code: 'FR', latitude: 48.85, longitude: 2.35 },
+          { name: 'Paris', admin1: 'Texas', country: 'United States', country_code: 'US', latitude: 33.66, longitude: -95.55 }
+        ]
+      })
+    })
+    assert.equal((await geocode('Paris, Texas')).city, 'Paris, Texas, United States')
+    assert.equal(requested[0].get('name'), 'Paris')
+    assert.equal(requested[0].get('count'), '10')
+    assert.equal((await geocode('Paris, US')).lat, 33.66)
+    assert.equal((await geocode('Paris, Japan')), null)
+  })
 })
 
 describe('getCurrentWeather', () => {

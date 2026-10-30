@@ -48,12 +48,19 @@ async function * createStream (client, body) {
 
 export class WeatherAssistant {
   constructor ({ client, model, units = 'metric', onDelta, onToolResult } = {}) {
-    this.client = client ?? createClient()
+    // Built on first use, so a session with no AI backend configured can still
+    // serve direct lookups without constructing (and failing on) an SDK client.
+    this._client = client ?? null
     this.model = model ?? process.env.WXBOT_AI_MODEL
     this.units = units
     this.onDelta = onDelta
     this.onToolResult = onToolResult
     this.messages = [{ role: 'system', content: SYSTEM_PROMPT }]
+  }
+
+  get client () {
+    if (!this._client) this._client = createClient()
+    return this._client
   }
 
   setUnits (units) {
@@ -62,6 +69,26 @@ export class WeatherAssistant {
 
   reset () {
     this.messages = [{ role: 'system', content: SYSTEM_PROMPT }]
+  }
+
+  /**
+   * Record a turn answered without the model (the direct path) so follow-ups
+   * can rely on it. Leaves the same messages a tool-calling turn would, plus a
+   * closing assistant line for backends whose chat templates need one.
+   */
+  recordLookup (userMessage, { name, args, result }) {
+    const id = `direct_${this.messages.length}`
+    this.messages.push(
+      { role: 'user', content: userMessage },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
+      },
+      { role: 'tool', tool_call_id: id, content: result },
+      { role: 'assistant', content: 'Shown to the user as a weather card.' }
+    )
+    this.trimHistory()
   }
 
   trimHistory () {

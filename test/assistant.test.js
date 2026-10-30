@@ -233,6 +233,35 @@ describe('WeatherAssistant', () => {
     assert.match(toolMessage.content, /Tokyo/)
   })
 
+  test('recordLookup leaves a direct answer in the conversation', async () => {
+    let sent
+    const client = {
+      chat: {
+        completions: {
+          create: async (body) => {
+            sent = body.messages
+            return { choices: [{ message: { content: 'Tomorrow looks dry.' } }] }
+          }
+        }
+      }
+    }
+    const assistant = new WeatherAssistant({ client })
+    assistant.recordLookup('weather in Tokyo', {
+      name: 'getCurrentWeather',
+      args: { city: 'Tokyo', units: 'metric' },
+      result: '{"city":"Tokyo"}'
+    })
+    await assistant.ask('what about tomorrow?')
+
+    const [, user, call, tool, closing, followUp] = sent
+    assert.equal(user.content, 'weather in Tokyo')
+    assert.equal(call.tool_calls[0].function.name, 'getCurrentWeather')
+    assert.equal(tool.tool_call_id, call.tool_calls[0].id)
+    assert.equal(tool.content, '{"city":"Tokyo"}')
+    assert.equal(closing.role, 'assistant')
+    assert.equal(followUp.content, 'what about tomorrow?')
+  })
+
   test('reset clears conversation but keeps units', () => {
     const client = { chat: { completions: { create: async () => ({}) } } }
     const assistant = new WeatherAssistant({ client, units: 'imperial' })

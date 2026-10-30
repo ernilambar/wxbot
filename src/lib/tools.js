@@ -41,16 +41,32 @@ function normalizeDays (days) {
   return Math.max(1, Math.min(Number.isInteger(days) ? days : 3, 7))
 }
 
+/**
+ * True when a geocoding result matches a qualifier such as "Texas", "Nepal" or
+ * "US" (the part after the comma in "Paris, Texas").
+ */
+function matchesQualifier (loc, qualifier) {
+  const q = qualifier.toLowerCase()
+  if (loc.country_code?.toLowerCase() === q) return true
+  return q.length > 2 && [loc.admin1, loc.country].some((field) => field?.toLowerCase().includes(q))
+}
+
 export async function geocode (city) {
   city = validateCity(city)
+  // Open-Meteo matches on the place name only, so "Paris, Texas" is searched as
+  // "Paris" and the qualifier picks among the same-named results.
+  const [name, ...qualifiers] = city.split(',').map((part) => part.trim()).filter(Boolean)
   const url = new URL(GEOCODE_URL)
-  url.searchParams.set('name', city)
-  url.searchParams.set('count', '1')
+  url.searchParams.set('name', name)
+  url.searchParams.set('count', qualifiers.length > 0 ? '10' : '1')
 
   const data = await fetchJson(url)
   if (!data.results || data.results.length === 0) return null
 
-  const loc = data.results[0]
+  const loc = qualifiers.length > 0
+    ? data.results.find((result) => qualifiers.every((q) => matchesQualifier(result, q)))
+    : data.results[0]
+  if (!loc) return null
   return {
     lat: loc.latitude,
     lon: loc.longitude,
@@ -187,7 +203,7 @@ export const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          city: { type: 'string', description: 'City name' },
+          city: { type: 'string', description: 'City name, optionally with region or country, e.g. "Paris, Texas"' },
           units: {
             type: 'string',
             enum: ['metric', 'imperial'],
@@ -207,7 +223,7 @@ export const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          city: { type: 'string', description: 'City name' },
+          city: { type: 'string', description: 'City name, optionally with region or country, e.g. "Paris, Texas"' },
           days: { type: 'integer', description: 'Number of days to forecast, 1-7' },
           units: {
             type: 'string',
