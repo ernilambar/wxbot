@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 - 2026-10-30
+- Changed: Homebrew is now the primary installation method
+- Changed: Update dependencies
+
 ## 0.1.3 - 2026-09-11
 - Fixed: Duplicated tool name when a backend resends the full name in every streaming delta
 

@@ -34,7 +34,7 @@ const HELP = [
 ].join('\n')
 
 const CLI_HELP = [
-  `${chalk.bold('wxbot')} ${chalk.dim(pkg.version || '')} — Conversational local LLM weather assistant`,
+  `${chalk.bold('wxbot')} ${chalk.dim(pkg.version || '')} — AI weather assistant in your terminal`,
   '',
   chalk.bold('Usage:'),
   `  ${chalk.cyan('wxbot')}                          interactive REPL`,
