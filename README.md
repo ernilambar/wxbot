@@ -4,7 +4,7 @@ AI weather assistant in your terminal.
 
 ## Features
 
-- **Works without an AI backend.** `weather in Tokyo`, `/now <city>` and `/forecast <city> [days]` are parsed deterministically and answered straight from Open-Meteo — no model, no tokens, ~300ms.
+- **Works without an AI backend.** `weather in Tokyo`, `/now <city>` and `/forecast <city> [days]` are parsed deterministically and answered straight from Open-Meteo — no model, no tokens.
 - Current weather + multi-day forecast via [Open-Meteo](https://open-meteo.com)
 - Real-time data via tool calling — never guesses numbers
 - Conversational memory across turns, streamed replies, weather cards, sparklines
@@ -20,7 +20,7 @@ AI weather assistant in your terminal.
 | `compare Tokyo and Oslo` | model — needs two lookups + prose |
 | `what about tomorrow?` | model — needs conversation memory |
 
-The direct path is chosen by `src/lib/intent.js`; anything it cannot parse confidently falls through to the assistant. Force either side with `--llm` / `--no-llm`.
+The direct path is chosen by `src/lib/intent.js`; anything it cannot parse confidently falls through to the assistant, as does a direct lookup whose place can't be found when a model is configured. Add a region or country after a comma to pick among same-named places: `weather in Paris, Texas`. Force either side with `--ai always` / `--ai never` (default `auto`).
 
 ## Install / Upgrade
 
@@ -68,12 +68,12 @@ export WXBOT_AI_MODEL="qwen3"
 
 ```sh
 wxbot                                       # REPL
-wxbot "weather in Tokyo?"                   # direct lookup, no model
-wxbot "forecast for Tokyo 5 days"           # direct lookup, no model
+wxbot "weather in Tokyo?"                         # direct lookup, no model
+wxbot "forecast for Tokyo 5 days"                 # direct lookup, no model
 wxbot "weather in Tokyo?" --units imperial
-wxbot "should I bring an umbrella?"         # model
-wxbot "weather in Tokyo" --no-llm           # never call the model
-wxbot "should I bring an umbrella?" --llm   # always call the model
+wxbot "should I bring an umbrella?"               # model
+wxbot "weather in Tokyo" --ai never               # never call the model
+wxbot "should I bring an umbrella?" --ai always   # always call the model
 ```
 
 In the REPL, `/now <city>` and `/forecast <city> [days]` answer directly, `/clear`

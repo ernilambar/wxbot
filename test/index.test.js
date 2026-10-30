@@ -12,12 +12,12 @@ describe('one-shot argument parsing', () => {
     assert.deepEqual(parseArgs(['weather in Tokyo']), {
       units: 'metric',
       prompt: 'weather in Tokyo',
-      llm: undefined
+      ai: 'auto'
     })
     assert.deepEqual(parseArgs(['weather in Tokyo', '-u', 'imperial']), {
       units: 'imperial',
       prompt: 'weather in Tokyo',
-      llm: undefined
+      ai: 'auto'
     })
   })
 
@@ -34,10 +34,11 @@ describe('one-shot argument parsing', () => {
     )
   })
 
-  test('parses --llm / --no-llm overrides', () => {
-    assert.equal(parseArgs(['weather in Tokyo', '--llm']).llm, true)
-    assert.equal(parseArgs(['weather in Tokyo', '--no-llm']).llm, false)
-    assert.equal(parseArgs(['weather in Tokyo']).llm, undefined)
+  test('parses --ai as auto, always or never', () => {
+    assert.equal(parseArgs(['weather in Tokyo', '--ai', 'always']).ai, 'always')
+    assert.equal(parseArgs(['weather in Tokyo', '--ai', 'never']).ai, 'never')
+    assert.equal(parseArgs(['weather in Tokyo']).ai, 'auto')
+    assert.throws(() => parseArgs(['weather in Tokyo', '--ai', 'maybe']), /Invalid values/)
   })
 })
 
@@ -57,15 +58,24 @@ describe('routing between the direct path and the assistant', () => {
     assert.deepEqual(resolveRoute('what about tomorrow?'), { kind: 'llm' })
   })
 
-  test('--llm forces the assistant even for plain lookups', () => {
-    assert.deepEqual(resolveRoute('weather in Tokyo', { llm: true }), { kind: 'llm' })
+  test('--ai always forces the assistant for plain lookups', () => {
+    assert.deepEqual(resolveRoute('weather in Tokyo', { ai: 'always' }), { kind: 'llm' })
   })
 
-  test('--no-llm still resolves direct lookups', () => {
-    assert.deepEqual(resolveRoute('weather in Tokyo', { llm: false }), {
+  test('/now and /forecast stay direct under --ai always', () => {
+    assert.deepEqual(resolveRoute('/now Tokyo', { ai: 'always' }), { kind: 'current', city: 'Tokyo' })
+    assert.deepEqual(resolveRoute('/forecast Tokyo 5', { ai: 'always' }), {
+      kind: 'forecast',
+      city: 'Tokyo',
+      days: 5
+    })
+  })
+
+  test('--ai never still resolves direct lookups', () => {
+    assert.deepEqual(resolveRoute('weather in Tokyo', { ai: 'never' }), {
       kind: 'current',
       city: 'Tokyo'
     })
-    assert.deepEqual(resolveRoute('what should I wear?', { llm: false }), { kind: 'llm' })
+    assert.deepEqual(resolveRoute('what should I wear?', { ai: 'never' }), { kind: 'llm' })
   })
 })

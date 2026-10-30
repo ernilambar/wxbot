@@ -71,6 +71,26 @@ export class WeatherAssistant {
     this.messages = [{ role: 'system', content: SYSTEM_PROMPT }]
   }
 
+  /**
+   * Record a turn answered without the model (the direct path) so follow-ups
+   * can rely on it. Leaves the same messages a tool-calling turn would, plus a
+   * closing assistant line for backends whose chat templates need one.
+   */
+  recordLookup (userMessage, { name, args, result }) {
+    const id = `direct_${this.messages.length}`
+    this.messages.push(
+      { role: 'user', content: userMessage },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }]
+      },
+      { role: 'tool', tool_call_id: id, content: result },
+      { role: 'assistant', content: 'Shown to the user as a weather card.' }
+    )
+    this.trimHistory()
+  }
+
   trimHistory () {
     const userIndexes = this.messages
       .map((message, index) => (message.role === 'user' ? index : -1))

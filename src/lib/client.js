@@ -20,9 +20,18 @@ export function createClient () {
   })
 }
 
+/** Env vars the model needs that are not set. The key is optional for local backends. */
+function missingEnv () {
+  // Local OpenAI-compatible servers (Ollama, LM Studio, vLLM) ignore auth.
+  const required = isLocalBackend()
+    ? REQUIRED_ENV.filter((v) => v !== 'WXBOT_AI_API_KEY')
+    : REQUIRED_ENV
+  return required.filter((v) => !process.env[v])
+}
+
 /** True when every env var the model needs is present. */
 export function hasEnv () {
-  return REQUIRED_ENV.every((v) => Boolean(process.env[v]))
+  return missingEnv().length === 0
 }
 
 /** True only for an AI backend that needs no credentials. */
@@ -39,11 +48,7 @@ function isLocalBackend () {
 }
 
 export function validateEnv () {
-  // Local OpenAI-compatible servers (Ollama, LM Studio, vLLM) ignore auth.
-  const required = isLocalBackend()
-    ? REQUIRED_ENV.filter((v) => v !== 'WXBOT_AI_API_KEY')
-    : REQUIRED_ENV
-  const missing = required.filter((v) => !process.env[v])
+  const missing = missingEnv()
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variable(s): ${missing.join(', ')}.\n` +

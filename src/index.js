@@ -20,7 +20,7 @@ import pkg from '../package.json'
 import { validateEnv, hasEnv } from './lib/client.js'
 import { WeatherAssistant } from './lib/assistant.js'
 import { getCurrentWeather, getForecast } from './lib/tools.js'
-import { parseWeatherQuery, describePlan } from './lib/intent.js'
+import { parseWeatherQuery, describePlan, selectDays } from './lib/intent.js'
 import {
   renderCurrent,
   renderForecast,
@@ -51,8 +51,7 @@ const CLI_HELP = [
   `  ${chalk.cyan('-h, --help')}             show this help`,
   `  ${chalk.cyan('-v, --version')}          show version`,
   `  ${chalk.cyan('-u, --units <units>')}    set units: ${chalk.yellow('imperial')} or ${chalk.yellow('metric')} (default: metric)`,
-  `  ${chalk.cyan('--llm')}                  always ask the model, even for plain lookups`,
-  `  ${chalk.cyan('--no-llm')}               never ask the model (fails if the prompt needs it)`,
+  `  ${chalk.cyan('--ai <when>')}            use the model: ${chalk.yellow('auto')}, ${chalk.yellow('always')} or ${chalk.yellow('never')} (default: auto)`,
   '',
   chalk.bold('Examples:'),
   `  ${chalk.cyan('wxbot')} "weather in Tokyo?"                       ${chalk.dim('direct lookup')}`,
@@ -79,9 +78,11 @@ export function parseArgs (argv) {
       default: 'metric',
       describe: 'set units: imperial or metric'
     })
-    .option('llm', {
-      type: 'boolean',
-      describe: 'force the AI assistant (--no-llm forbids it)'
+    .option('ai', {
+      type: 'string',
+      choices: ['auto', 'always', 'never'],
+      default: 'auto',
+      describe: 'when to use the AI model'
     })
     .exitProcess(false)
     .help(false)
@@ -99,7 +100,7 @@ export function parseArgs (argv) {
   return {
     units: parsed.units,
     prompt: positional[0] ?? '',
-    llm: typeof parsed.llm === 'boolean' ? parsed.llm : undefined
+    ai: parsed.ai
   }
 }
 
@@ -108,13 +109,15 @@ export function parseArgs (argv) {
  *
  * Returns a direct plan ({ kind: 'current' | 'forecast', city, days? }) when the
  * message is a self-contained lookup, or { kind: 'llm' } when it needs the
- * model. `llm === true` (/--llm) always escalates; `llm === false` (--no-llm)
- * never does, and callers report an error if the prompt cannot be answered
- * directly.
+ * model. Explicit /now and /forecast commands are always direct. Otherwise
+ * `ai: 'always'` escalates every turn; `ai: 'never'` never does, and callers
+ * report an error if the prompt cannot be answered directly.
  */
-export function resolveRoute (prompt, { llm } = {}) {
-  if (llm === true) return { kind: 'llm' }
-  return parseWeatherQuery(prompt) ?? { kind: 'llm' }
+export function resolveRoute (prompt, { ai = 'auto' } = {}) {
+  const direct = parseWeatherQuery(prompt)
+  if (direct && prompt.trim().startsWith('/')) return direct
+  if (ai === 'always') return { kind: 'llm' }
+  return direct ?? { kind: 'llm' }
 }
 
 function show (obj, compact = false) {
@@ -125,25 +128,22 @@ function show (obj, compact = false) {
 }
 
 /**
- * Answer a direct plan straight from Open-Meteo — no model, no tokens.
- * Returns the payload that was rendered.
+ * Look up a direct plan straight from Open-Meteo — no model, no tokens.
+ * Returns the lookup as a tool call ({ name, args, result, data }) so the REPL
+ * can record it in the conversation. Failures come back as `data.error` (the
+ * tools never throw); callers either render them or hand the turn to the model.
  */
-async function answerDirect (plan, units) {
+async function lookupDirect (plan, units) {
   const spinner = ora({ text: describePlan(plan) }).start()
   // In a TTY the spinner overwrites its line; when piped, keep it on its own.
   if (!process.stdout.isTTY) process.stdout.write('\n')
-  try {
-    const payload = plan.kind === 'current'
-      ? await getCurrentWeather({ city: plan.city, units })
-      : await getForecast({ city: plan.city, days: plan.days, units })
-    spinner.stop()
-    const data = JSON.parse(payload)
-    process.stdout.write(show(data) + '\n')
-    return data
-  } catch (err) {
-    spinner.stop()
-    throw err
-  }
+  const [name, args] = plan.kind === 'current'
+    ? ['getCurrentWeather', { city: plan.city, units }]
+    : ['getForecast', { city: plan.city, days: plan.days, units }]
+  const fn = name === 'getCurrentWeather' ? getCurrentWeather : getForecast
+  const data = selectDays(plan, JSON.parse(await fn(args)))
+  spinner.stop()
+  return { name, args, result: JSON.stringify(data), data }
 }
 
 /**
@@ -203,10 +203,15 @@ function createPrintQueue (getSpinner) {
   }
 }
 
-async function oneShot (prompt, units, route) {
+async function oneShot (prompt, units, route, ai) {
   if (route.kind !== 'llm') {
-    await answerDirect(route, units)
-    return
+    const { data } = await lookupDirect(route, units)
+    // A place the geocoder can't resolve may still be one the model can.
+    if (!data.error || ai === 'never' || !hasEnv()) {
+      process.stdout.write(show(data) + '\n')
+      if (data.error) process.exitCode = 1
+      return
+    }
   }
 
   const assistant = new WeatherAssistant({ units })
@@ -240,7 +245,7 @@ async function oneShot (prompt, units, route) {
   }
 }
 
-async function repl (assistant, { llm } = {}) {
+async function repl (assistant, { ai } = {}) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   let spinner = null
   const printQueue = createPrintQueue(() => spinner)
@@ -278,7 +283,7 @@ async function repl (assistant, { llm } = {}) {
       continue
     }
 
-    const route = resolveRoute(trimmed, { llm })
+    const route = resolveRoute(trimmed, { ai })
 
     if (trimmed.startsWith('/')) {
       const [cmd] = trimmed.split(/\s+/)
@@ -304,7 +309,7 @@ async function repl (assistant, { llm } = {}) {
           const usage = cmd === '/now' ? '/now <city>' : '/forecast <city> [days 1-7]'
           console.log(`Which city? Usage: ${chalk.cyan(usage)}`)
         } else {
-          const hint = llm === false ? ' (AI is disabled by --no-llm)' : ''
+          const hint = ai === 'never' ? ' (AI is disabled by --ai never)' : ''
           console.log(`Unknown command: ${cmd}${hint}. Type /help for a list.`)
         }
         prompt()
@@ -313,18 +318,20 @@ async function repl (assistant, { llm } = {}) {
     }
 
     if (route.kind !== 'llm') {
-      try {
-        await answerDirect(route, assistant.units)
-      } catch (err) {
-        console.error(chalk.red(`Error: ${err.message}`))
+      const lookup = await lookupDirect(route, assistant.units)
+      // A place the geocoder can't resolve may still be one the model can.
+      if (!lookup.data.error || ai === 'never' || !hasEnv()) {
+        process.stdout.write(show(lookup.data) + '\n')
+        // Recorded so a follow-up like "what about tomorrow?" knows the city.
+        if (!lookup.data.error) assistant.recordLookup(trimmed, lookup)
+        prompt()
+        continue
       }
-      prompt()
-      continue
     }
 
-    if (llm === false) {
+    if (ai === 'never') {
       console.log(
-        chalk.yellow('--no-llm is set, so that question can\'t be answered.') +
+        chalk.yellow('--ai never is set, so that question can\'t be answered.') +
           ` Try a direct lookup, e.g. ${chalk.cyan('weather in Tokyo')} or ${chalk.cyan('/forecast Tokyo 5')}.`
       )
       prompt()
@@ -407,31 +414,30 @@ export async function main () {
   }
 
   const hasPrompt = parsed.prompt.length > 0
-  const route = resolveRoute(parsed.prompt, { llm: parsed.llm })
+  const route = resolveRoute(parsed.prompt, { ai: parsed.ai })
 
-  // Only the model path needs credentials; a direct lookup never touches them.
-  if (route.kind === 'llm') {
-    if (parsed.llm === false) {
+  // Only a one-shot model answer needs credentials up front; the REPL checks
+  // per turn, and a direct lookup never touches them.
+  if (hasPrompt && route.kind === 'llm') {
+    if (parsed.ai === 'never') {
       console.error(
-        `Error: --no-llm is set but "${parsed.prompt}" needs the assistant.\n` +
-          'Try a direct lookup such as: wxbot "weather in Tokyo" --no-llm'
+        `Error: --ai never is set but "${parsed.prompt}" needs the assistant.\n` +
+          'Try a direct lookup such as: wxbot "weather in Tokyo" --ai never'
       )
       process.exitCode = 1
       return
     }
-    if (hasPrompt) {
-      try {
-        validateEnv()
-      } catch (err) {
-        console.error(`Error: ${err.message}`)
-        process.exitCode = 1
-        return
-      }
+    try {
+      validateEnv()
+    } catch (err) {
+      console.error(`Error: ${err.message}`)
+      process.exitCode = 1
+      return
     }
   }
 
   if (hasPrompt) {
-    await oneShot(parsed.prompt, parsed.units, route)
+    await oneShot(parsed.prompt, parsed.units, route, parsed.ai)
     return
   }
 
@@ -444,7 +450,7 @@ export async function main () {
     )
   }
 
-  await repl(assistant, { llm: parsed.llm })
+  await repl(assistant, { ai: parsed.ai })
 }
 
 // Only run the CLI when executed directly (bun src/index.js),

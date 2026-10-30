@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseWeatherQuery, describePlan } from '../src/lib/intent.js'
+import { parseWeatherQuery, describePlan, selectDays } from '../src/lib/intent.js'
 
 describe('parseWeatherQuery — slash commands', () => {
   test('/now targets current conditions', () => {
@@ -61,7 +61,20 @@ describe('parseWeatherQuery — natural phrasing', () => {
     assert.deepEqual(parseWeatherQuery('weather in Tokyo tomorrow'), {
       kind: 'forecast',
       city: 'Tokyo',
-      days: 2
+      days: 2,
+      from: 1
+    })
+    assert.deepEqual(parseWeatherQuery('weather in Tokyo in 3 days'), {
+      kind: 'forecast',
+      city: 'Tokyo',
+      days: 4,
+      from: 3
+    })
+    assert.deepEqual(parseWeatherQuery('Tokyo forecast this weekend'), {
+      kind: 'forecast',
+      city: 'Tokyo',
+      days: 7,
+      weekend: true
     })
     assert.deepEqual(parseWeatherQuery('weather in Tokyo for 5 days'), {
       kind: 'forecast',
@@ -81,15 +94,38 @@ describe('parseWeatherQuery — natural phrasing', () => {
       city: 'Tokyo',
       days: 3
     })
+    assert.deepEqual(parseWeatherQuery('will it rain in London tomorrow'), {
+      kind: 'forecast',
+      city: 'London',
+      days: 2,
+      from: 1
+    })
+  })
+
+  test('"is it raining" asks about now', () => {
+    assert.deepEqual(parseWeatherQuery('is it raining in Tokyo?'), { kind: 'current', city: 'Tokyo' })
   })
 
   test('multi-word and punctuated place names survive', () => {
     assert.deepEqual(parseWeatherQuery('weather in New York'), { kind: 'current', city: 'New York' })
-    assert.deepEqual(parseWeatherQuery('weather in St. Louis'), { kind: 'current', city: 'St Louis' })
+    assert.deepEqual(parseWeatherQuery('weather in St. Louis'), { kind: 'current', city: 'St. Louis' })
+    assert.deepEqual(parseWeatherQuery('weather in The Hague'), { kind: 'current', city: 'The Hague' })
+  })
+
+  test('a comma qualifier is kept for the geocoder', () => {
     assert.deepEqual(parseWeatherQuery('weather in Kathmandu, Nepal'), {
       kind: 'current',
-      city: 'Kathmandu Nepal'
+      city: 'Kathmandu, Nepal'
     })
+    assert.deepEqual(parseWeatherQuery('weather in Tokyo,Japan please'), {
+      kind: 'current',
+      city: 'Tokyo, Japan'
+    })
+  })
+
+  test('condition words inside place names survive', () => {
+    assert.deepEqual(parseWeatherQuery('Cold Spring weather'), { kind: 'current', city: 'Cold Spring' })
+    assert.deepEqual(parseWeatherQuery('weather in Hot Springs'), { kind: 'current', city: 'Hot Springs' })
   })
 })
 
@@ -101,6 +137,23 @@ describe('parseWeatherQuery — falls through to the model', () => {
       'is it a good day for a hike in Pokhara',
       'do I need a jacket in London',
       'will it be safe to drive to Munich tomorrow'
+    ]) {
+      assert.equal(parseWeatherQuery(input), null, input)
+    }
+  })
+
+  test('leftover words are never folded into the city', () => {
+    for (const input of [
+      'weather in Tokyo yesterday',
+      'weather in Tokyo last week',
+      'weather in Tokyo and Oslo',
+      'weather in Tokyo or Oslo',
+      'weather in Sydney in fahrenheit',
+      'weather in Boston in May',
+      'weather in Tokyo at 5pm',
+      'how is the weather in Tokyo compared to yesterday',
+      'also Oslo weather',
+      'what about Oslo weather'
     ]) {
       assert.equal(parseWeatherQuery(input), null, input)
     }
@@ -134,6 +187,41 @@ describe('describePlan', () => {
       describePlan({ kind: 'forecast', city: 'Tokyo', days: 5 }),
       'Fetching 5-day forecast for Tokyo…'
     )
+    assert.equal(
+      describePlan({ kind: 'forecast', city: 'Tokyo', days: 2, from: 1 }),
+      "Fetching tomorrow's forecast for Tokyo…"
+    )
+    assert.equal(
+      describePlan({ kind: 'forecast', city: 'Tokyo', days: 7, weekend: true }),
+      'Fetching the weekend forecast for Tokyo…'
+    )
     assert.equal(describePlan(null), '')
+  })
+})
+
+describe('selectDays', () => {
+  // 2026-10-30 is a Friday.
+  const week = {
+    city: 'Tokyo',
+    forecast: ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'].map((date) => ({ date }))
+  }
+  const dates = (data) => data.forecast.map((d) => d.date)
+
+  test('skips leading days for "tomorrow" and "in N days"', () => {
+    assert.deepEqual(dates(selectDays({ from: 1 }, week)), ['2026-10-31', '2026-11-01', '2026-11-02'])
+  })
+
+  test('keeps only Saturday and Sunday for the weekend', () => {
+    assert.deepEqual(dates(selectDays({ weekend: true }, week)), ['2026-10-31', '2026-11-01'])
+  })
+
+  test('on a Sunday the weekend is just today', () => {
+    const sunday = { forecast: week.forecast.slice(2) }
+    assert.deepEqual(dates(selectDays({ weekend: true }, sunday)), ['2026-11-01'])
+  })
+
+  test('error payloads pass through untouched', () => {
+    const error = { error: 'Could not find location: Atlantis' }
+    assert.equal(selectDays({ from: 1 }, error), error)
   })
 })
