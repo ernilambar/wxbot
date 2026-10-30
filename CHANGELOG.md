@@ -1,14 +1,10 @@
 # Changelog
 
-## Unreleased
-- Added: Zero-LLM fast path — `weather in <city>`, `forecast for <city> N days`, `/now <city>` and `/forecast <city> [days]` are parsed deterministically and answered straight from Open-Meteo. Works with no AI backend configured.
-- Added: `--ai <auto|always|never>` to choose when the model is used (default `auto`)
-- Added: Place names accept a region or country after a comma (`Paris, Texas`, `Kathmandu, Nepal`), for direct lookups and the model's tool calls
-- Added: "tomorrow", "in N days" and "this weekend" show only those days
-- Changed: Direct lookups are kept in conversation memory, so follow-ups like "what about tomorrow?" know the city
-- Changed: A direct lookup whose place can't be found falls back to the model when one is configured
-- Changed: Missing AI credentials no longer block startup; the REPL reports them per turn and keeps direct lookups working
-- Changed: `WXBOT_AI_API_KEY` is optional for localhost backends
+## 0.1.5 - 2026-10-30
+- Added: Zero-LLM fast path — `weather in <city>`, `/now`, `/forecast <city>`, plus `--ai auto|always|never`
+- Added: Natural phrasing for dates and places — "tomorrow", "in N days", "this weekend", `Paris, Texas`
+- Changed: Direct lookups are remembered across turns and fall back to the model when a place can't be found
+- Changed: AI credentials are optional at startup; direct lookups work with no backend configured
 - Fixed: Re-prompting a closed readline interface crashed piped sessions (`ERR_USE_AFTER_CLOSE`)
 
 ## 0.1.4 - 2026-10-30
