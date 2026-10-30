@@ -2,10 +2,12 @@
 /**
  * Weather AI Assistant — Bun CLI
  *
- * A conversational local LLM agent with:
- *   - Current weather + multi-day forecast
- *   - Conversational memory (remembers city, date across turns)
- *   - Practical recommendations (umbrella, clothing, activity suitability)
+ * Two ways to answer a question:
+ *   1. Direct (zero-LLM) — a city + current/forecast lookup is parsed
+ *      deterministically and rendered straight from Open-Meteo. No model, no
+ *      tokens, no backend required.
+ *   2. Assistant — advice, comparisons and conversational follow-ups go to the
+ *      model, which calls the same tools for real data.
  */
 
 import readline from 'readline'
@@ -15,8 +17,10 @@ import ora from 'ora'
 import yargs from 'yargs'
 
 import pkg from '../package.json'
-import { validateEnv } from './lib/client.js'
+import { validateEnv, hasEnv } from './lib/client.js'
 import { WeatherAssistant } from './lib/assistant.js'
+import { getCurrentWeather, getForecast } from './lib/tools.js'
+import { parseWeatherQuery, describePlan } from './lib/intent.js'
 import {
   renderCurrent,
   renderForecast,
@@ -26,11 +30,14 @@ import {
 
 const HELP = [
   'Commands:',
-  `  ${chalk.cyan('/help')}       show this help`,
-  `  ${chalk.cyan('/clear')}      start a fresh conversation (keeps your units)`,
-  `  ${chalk.cyan('/units')}      toggle between metric (°C) and imperial (°F)`,
+  `  ${chalk.cyan('/help')}                  show this help`,
+  `  ${chalk.cyan('/now <city>')}           current conditions ${chalk.dim('(no AI)')}`,
+  `  ${chalk.cyan('/forecast <city> [n]')}  n-day forecast, 1-7 ${chalk.dim('(no AI)')}`,
+  `  ${chalk.cyan('/clear')}                start a fresh conversation (keeps your units)`,
+  `  ${chalk.cyan('/units')}                toggle between metric (°C) and imperial (°F)`,
   '',
-  `Anything else is sent to the model. Type ${chalk.yellow('quit')} or ${chalk.yellow('exit')} to leave.`
+  `Plain lookups like ${chalk.cyan('weather in Tokyo')} or ${chalk.cyan('forecast for Tokyo 5 days')} are answered without the model.`,
+  `Anything else goes to the model. Type ${chalk.yellow('quit')} or ${chalk.yellow('exit')} to leave.`
 ].join('\n')
 
 const CLI_HELP = [
@@ -44,14 +51,17 @@ const CLI_HELP = [
   `  ${chalk.cyan('-h, --help')}             show this help`,
   `  ${chalk.cyan('-v, --version')}          show version`,
   `  ${chalk.cyan('-u, --units <units>')}    set units: ${chalk.yellow('imperial')} or ${chalk.yellow('metric')} (default: metric)`,
+  `  ${chalk.cyan('--llm')}                  always ask the model, even for plain lookups`,
+  `  ${chalk.cyan('--no-llm')}               never ask the model (fails if the prompt needs it)`,
   '',
   chalk.bold('Examples:'),
-  `  ${chalk.cyan('wxbot')} "weather in Tokyo?"`,
-  `  ${chalk.cyan('wxbot')} "Will I need an umbrella this week?" ${chalk.yellow('--units imperial')}`,
+  `  ${chalk.cyan('wxbot')} "weather in Tokyo?"                       ${chalk.dim('direct lookup')}`,
+  `  ${chalk.cyan('wxbot')} "forecast for Tokyo 5 days"               ${chalk.dim('direct lookup')}`,
+  `  ${chalk.cyan('wxbot')} "Will I need an umbrella this week?" ${chalk.yellow('--units imperial')}  ${chalk.dim('model')}`,
   '',
   chalk.bold('Environment:'),
-  `  ${chalk.cyan('WXBOT_AI_BASE_URL')}  OpenAI-compatible API endpoint`,
-  `  ${chalk.cyan('WXBOT_AI_API_KEY')}   API key (or "not-needed" for local backends)`,
+  `  ${chalk.cyan('WXBOT_AI_BASE_URL')}  OpenAI-compatible API endpoint (needed only for advice)`,
+  `  ${chalk.cyan('WXBOT_AI_API_KEY')}   API key (optional for local backends)`,
   `  ${chalk.cyan('WXBOT_AI_MODEL')}     Model name to use`
 ].join('\n')
 
@@ -69,6 +79,10 @@ export function parseArgs (argv) {
       default: 'metric',
       describe: 'set units: imperial or metric'
     })
+    .option('llm', {
+      type: 'boolean',
+      describe: 'force the AI assistant (--no-llm forbids it)'
+    })
     .exitProcess(false)
     .help(false)
     .version(false)
@@ -84,8 +98,23 @@ export function parseArgs (argv) {
 
   return {
     units: parsed.units,
-    prompt: positional[0] ?? ''
+    prompt: positional[0] ?? '',
+    llm: typeof parsed.llm === 'boolean' ? parsed.llm : undefined
   }
+}
+
+/**
+ * Decide how a turn should be answered.
+ *
+ * Returns a direct plan ({ kind: 'current' | 'forecast', city, days? }) when the
+ * message is a self-contained lookup, or { kind: 'llm' } when it needs the
+ * model. `llm === true` (/--llm) always escalates; `llm === false` (--no-llm)
+ * never does, and callers report an error if the prompt cannot be answered
+ * directly.
+ */
+export function resolveRoute (prompt, { llm } = {}) {
+  if (llm === true) return { kind: 'llm' }
+  return parseWeatherQuery(prompt) ?? { kind: 'llm' }
 }
 
 function show (obj, compact = false) {
@@ -93,6 +122,28 @@ function show (obj, compact = false) {
     return compact ? renderForecastCompact(obj) : renderForecast(obj)
   }
   return compact ? renderCurrentCompact(obj) : renderCurrent(obj)
+}
+
+/**
+ * Answer a direct plan straight from Open-Meteo — no model, no tokens.
+ * Returns the payload that was rendered.
+ */
+async function answerDirect (plan, units) {
+  const spinner = ora({ text: describePlan(plan) }).start()
+  // In a TTY the spinner overwrites its line; when piped, keep it on its own.
+  if (!process.stdout.isTTY) process.stdout.write('\n')
+  try {
+    const payload = plan.kind === 'current'
+      ? await getCurrentWeather({ city: plan.city, units })
+      : await getForecast({ city: plan.city, days: plan.days, units })
+    spinner.stop()
+    const data = JSON.parse(payload)
+    process.stdout.write(show(data) + '\n')
+    return data
+  } catch (err) {
+    spinner.stop()
+    throw err
+  }
 }
 
 /**
@@ -152,7 +203,12 @@ function createPrintQueue (getSpinner) {
   }
 }
 
-async function oneShot (prompt, units) {
+async function oneShot (prompt, units, route) {
+  if (route.kind !== 'llm') {
+    await answerDirect(route, units)
+    return
+  }
+
   const assistant = new WeatherAssistant({ units })
   let spinner = null
   const printQueue = createPrintQueue(() => spinner)
@@ -184,11 +240,19 @@ async function oneShot (prompt, units) {
   }
 }
 
-async function repl (assistant) {
+async function repl (assistant, { llm } = {}) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   let spinner = null
   const printQueue = createPrintQueue(() => spinner)
   rl.setPrompt(`${YOU_LABEL} `)
+
+  // stdin can hit EOF while a turn is still running (piped input); re-prompting
+  // a closed interface throws ERR_USE_AFTER_CLOSE.
+  let closed = false
+  rl.on('close', () => { closed = true })
+  const prompt = () => {
+    if (!closed) rl.prompt()
+  }
 
   process.once('SIGINT', () => {
     console.log('\nBye!')
@@ -199,7 +263,7 @@ async function repl (assistant) {
   // Calling rl.prompt() when a line arrives (as the async iterator yields it)
   // would only render "You: " after the input is already submitted, so it
   // never appears where the user expects it.
-  rl.prompt()
+  prompt()
 
   // Use the async iterator rather than rl.question: question() does not
   // re-arm reliably with piped stdin across async gaps, so follow-up
@@ -209,26 +273,73 @@ async function repl (assistant) {
     if (['quit', 'exit'].includes(trimmed.toLowerCase())) {
       break
     }
-    if (trimmed.startsWith('/')) {
-      const [cmd] = trimmed.split(/\s+/)
-      switch (cmd) {
-        case '/help':
-          console.log(HELP)
-          break
-        case '/clear':
-          assistant.reset()
-          console.log('Conversation cleared.')
-          break
-        case '/units':
-          assistant.setUnits(assistant.units === 'metric' ? 'imperial' : 'metric')
-          console.log(`Units set to ${assistant.units === 'metric' ? 'metric (°C)' : 'imperial (°F)'}.`)
-          break
-        default:
-          console.log(`Unknown command: ${cmd}. Type /help for a list.`)
-      }
-      rl.prompt()
+    if (!trimmed) {
+      prompt()
       continue
     }
+
+    const route = resolveRoute(trimmed, { llm })
+
+    if (trimmed.startsWith('/')) {
+      const [cmd] = trimmed.split(/\s+/)
+      if (cmd === '/help') {
+        console.log(HELP)
+        prompt()
+        continue
+      }
+      if (cmd === '/clear') {
+        assistant.reset()
+        console.log('Conversation cleared.')
+        prompt()
+        continue
+      }
+      if (cmd === '/units') {
+        assistant.setUnits(assistant.units === 'metric' ? 'imperial' : 'metric')
+        console.log(`Units set to ${assistant.units === 'metric' ? 'metric (°C)' : 'imperial (°F)'}.`)
+        prompt()
+        continue
+      }
+      if (route.kind === 'llm') {
+        if (cmd === '/now' || cmd === '/forecast') {
+          const usage = cmd === '/now' ? '/now <city>' : '/forecast <city> [days 1-7]'
+          console.log(`Which city? Usage: ${chalk.cyan(usage)}`)
+        } else {
+          const hint = llm === false ? ' (AI is disabled by --no-llm)' : ''
+          console.log(`Unknown command: ${cmd}${hint}. Type /help for a list.`)
+        }
+        prompt()
+        continue
+      }
+    }
+
+    if (route.kind !== 'llm') {
+      try {
+        await answerDirect(route, assistant.units)
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`))
+      }
+      prompt()
+      continue
+    }
+
+    if (llm === false) {
+      console.log(
+        chalk.yellow('--no-llm is set, so that question can\'t be answered.') +
+          ` Try a direct lookup, e.g. ${chalk.cyan('weather in Tokyo')} or ${chalk.cyan('/forecast Tokyo 5')}.`
+      )
+      prompt()
+      continue
+    }
+
+    if (!hasEnv()) {
+      console.log(
+        chalk.yellow('No AI backend configured.') +
+          ` Direct lookups still work: ${chalk.cyan('weather in Tokyo')}, ${chalk.cyan('/now Tokyo')}, ${chalk.cyan('/forecast Tokyo 5')}.`
+      )
+      prompt()
+      continue
+    }
+
     try {
       spinner = ora({ text: 'Thinking…', discardStdin: false }).start()
       // In a TTY the spinner overwrites its line; when piped, put it on its
@@ -266,7 +377,7 @@ async function repl (assistant) {
       printQueue.flush()
       console.error(chalk.red(`Error: ${err.message}`))
     }
-    rl.prompt()
+    prompt()
   }
   rl.close()
 }
@@ -295,24 +406,45 @@ export async function main () {
     return
   }
 
-  try {
-    validateEnv()
-  } catch (err) {
-    console.error(`Error: ${err.message}`)
-    process.exitCode = 1
-    return
-  }
   const hasPrompt = parsed.prompt.length > 0
+  const route = resolveRoute(parsed.prompt, { llm: parsed.llm })
+
+  // Only the model path needs credentials; a direct lookup never touches them.
+  if (route.kind === 'llm') {
+    if (parsed.llm === false) {
+      console.error(
+        `Error: --no-llm is set but "${parsed.prompt}" needs the assistant.\n` +
+          'Try a direct lookup such as: wxbot "weather in Tokyo" --no-llm'
+      )
+      process.exitCode = 1
+      return
+    }
+    if (hasPrompt) {
+      try {
+        validateEnv()
+      } catch (err) {
+        console.error(`Error: ${err.message}`)
+        process.exitCode = 1
+        return
+      }
+    }
+  }
 
   if (hasPrompt) {
-    await oneShot(parsed.prompt, parsed.units)
+    await oneShot(parsed.prompt, parsed.units, route)
     return
   }
 
   const assistant = new WeatherAssistant({ units: parsed.units })
-  console.log('Weather assistant ready. Try "weather in Tokyo?" — /help for commands, quit to exit.\n')
+  const ready = 'Weather assistant ready. Try "weather in Tokyo?" — /help for commands, quit to exit.'
+  console.log(`${ready}\n`)
+  if (!hasEnv()) {
+    console.log(
+      chalk.dim('No AI backend configured: direct lookups (/now, /forecast, "weather in <city>") still work.\n')
+    )
+  }
 
-  await repl(assistant)
+  await repl(assistant, { llm: parsed.llm })
 }
 
 // Only run the CLI when executed directly (bun src/index.js),

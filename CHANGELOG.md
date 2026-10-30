@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- Added: Zero-LLM fast path — `weather in <city>`, `forecast for <city> N days`, `/now <city>` and `/forecast <city> [days]` are parsed deterministically and answered straight from Open-Meteo. Works with no AI backend configured.
+- Added: `--llm` / `--no-llm` to force or forbid the model per run
+- Changed: Missing AI credentials no longer block startup; the REPL reports them per turn and keeps direct lookups working
+- Changed: `WXBOT_AI_API_KEY` is optional for localhost backends
+- Fixed: Re-prompting a closed readline interface crashed piped sessions (`ERR_USE_AFTER_CLOSE`)
+
 ## 0.1.4 - 2026-10-30
 - Changed: Homebrew is now the primary installation method
 - Changed: Update dependencies

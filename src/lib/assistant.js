@@ -48,12 +48,19 @@ async function * createStream (client, body) {
 
 export class WeatherAssistant {
   constructor ({ client, model, units = 'metric', onDelta, onToolResult } = {}) {
-    this.client = client ?? createClient()
+    // Built on first use, so a session with no AI backend configured can still
+    // serve direct lookups without constructing (and failing on) an SDK client.
+    this._client = client ?? null
     this.model = model ?? process.env.WXBOT_AI_MODEL
     this.units = units
     this.onDelta = onDelta
     this.onToolResult = onToolResult
     this.messages = [{ role: 'system', content: SYSTEM_PROMPT }]
+  }
+
+  get client () {
+    if (!this._client) this._client = createClient()
+    return this._client
   }
 
   setUnits (units) {
