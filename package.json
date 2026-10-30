@@ -35,18 +35,18 @@
     "test": "bun test"
   },
   "dependencies": {
-    "chalk": "^6.0.0",
-    "openai": "^7.13.0",
+    "chalk": "^6.0.1",
+    "openai": "^7.45.1",
     "ora": "^9.4.1",
-    "string-width": "^7.2.0",
-    "yargs": "^18.1.0"
+    "string-width": "^8.3.0",
+    "yargs": "^18.2.0"
   },
   "devDependencies": {
-    "eslint": "^9.39.5",
-    "neostandard": "^0.13.0"
+    "eslint": "^10.14.0",
+    "neostandard": "^0.14.1"
   },
   "engines": {
     "bun": ">=1.2",
-    "node": ">=22"
+    "node": ">=22.13.0"
   }
 }
